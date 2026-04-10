@@ -2,46 +2,41 @@
 
 Moderne, verteilte Architektur für Rechnungsverarbeitung und asynchrone Zahlungsbearbeitung.
 
-## 🏗️ Architektur-Überblick
+## Architektur-Überblick
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────┐
-│                      TEST CLIENT                             │
-│                  (client/test_client.py)                     │
+│                      TEST CLIENT                            │
+│                  (client/test_client.py)                    │
 └────────────────────────┬────────────────────────────────────┘
-                         │ gRPC
-                         ▼
+                         │  save invoices
+                         ▼  initiate payment
 ┌─────────────────────────────────────────────────────────────┐
-│              gRPC SERVER (Port 50051)                        │
-│             (app/grpc_server.py)                             │
-│   • CreateInvoice / GetInvoice / UpdateInvoice              │
-│   • ListInvoices / DeleteInvoice                            │
-│   • InitiatePayment (→ RabbitMQ)                            │
-└──────┬────────────────────────────────┬─────────────────────┘
-       │ SQL                            │ Publish
-       ▼                                ▼
-┌────────────────────┐        ┌──────────────────────────┐
-│   PostgreSQL       │        │    RabbitMQ              │
-│  (invoice_db)      │        │  payment_orders queue    │
-│                    │        │  payment_results queue   │
-└────────────────────┘        └────────┬─────────────────┘
-                                       │ Consume
-                                       ▼
-                            ┌──────────────────────────┐
-                            │  PAYMENT SERVICE         │
-                            │ (app/payment_service.py) │
-                            │                          │
-                            │  1. Parse Message        │
-                            │  2. Validate Invoice     │
-                            │  3. Process Payment      │
-                            │  4. Update DB            │
-                            │  5. Publish Result       │
-                            └──────────────────────────┘
+│              gRPC SERVER (Port 50051)                       │
+│             (app/grpc_server.py)                            │
+│   • CreateInvoice / GetInvoice / UpdateInvoice              │   update invoice status
+│   • ListInvoices / DeleteInvoice /UpdateStatusInvoice       │<------------------------| 
+│   • InitiatePayment (→ RabbitMQ)                            │                         │
+└──────┬────────────────────────────────┬─────────────────────┘                         │
+       │ SQL                            │ publish to payment_orders                     │
+       ▼                                ▼                                               │
+┌────────────────────┐        ┌────────────────────────────────────┐      ┌──────────────────────────┐
+│   PostgreSQL       │        │               RabbitMQ             │      │  PAYMENT SERVICE         │
+│  (invoice_db)      │        │                                    │      │ (app/payment_service.py) │
+│                    │        │  ┌──────────────────────────────┐  │cons. │  1. Parse Message        │
+└────────────────────┘        │  │     payment_orders queue     │--│----->│  2. Validate Invoice     │
+                              │  └──────────────────────────────┘  │      │  3. Process Payment      │
+                              │  ┌──────────────────────────────┐  │publ. │  4. Update via gRPC      │
+                              │  │    payment_results queue     │<-│------│  5. Publish Result       │
+                              │  └──────────────────────────────┘  │      └──────────────────────────┘
+                              └────────────────────────────────────┘
+
+                 
 ```
 
 ---
 
-## 📌 Die 3 Hauptkomponenten
+## Die 3 Hauptkomponenten
 
 ### 1. gRPC Server (`app/grpc_server.py`)
 
@@ -50,7 +45,7 @@ Moderne, verteilte Architektur für Rechnungsverarbeitung und asynchrone Zahlung
 **Methoden:**
 
 | Methode | Input | Output | Beschreibung |
-|---------|-------|--------|-------------|
+| ------- | ----- | ------ | ------------ |
 | `CreateInvoice` | id, supplier, amount | Invoice | Neue Rechnung erstellen. Validiert, dass ID nicht doppelt existiert. |
 | `GetInvoice` | id | Invoice | Einzelne Rechnung abrufen. |
 | `ListInvoices` | skip, limit | [Invoice], total | Alle Rechnungen mit Pagination. |
@@ -59,7 +54,8 @@ Moderne, verteilte Architektur für Rechnungsverarbeitung und asynchrone Zahlung
 | `InitiatePayment` | invoice_id, amount, method | payment_id | Zahlung initiieren → Message in `payment_orders` Queue. |
 
 **Workflow beispiel:**
-```
+
+```text
 Client ruft CreateInvoice auf
        ↓
 gRPC Server prüft: Existiert diese ID schon?
@@ -79,7 +75,7 @@ Protobuf Message → Client
 
 **Workflow:**
 
-```
+```text
 RabbitMQ payment_orders Queue
        ↓
 [process_payment_order] callback greift Message
@@ -98,6 +94,7 @@ Message ACK → Bestätigung an RabbitMQ
 ```
 
 **Error Handling:**
+
 - JSON Parse Error → Message NACK (nicht requeued)
 - Invoice not found → Result "failed" senden, Message ACK
 - DB Update Error → Message NACK mit `requeue=True` (Retry)
@@ -107,6 +104,7 @@ Message ACK → Bestätigung an RabbitMQ
 ### 3. Hilfsfunktionen (`app/utils/`)
 
 **Lazy Logging** (`logging_config.py`):
+
 ```python
 logger = StructuredLogger.for_module(__name__)
 logger.log_grpc_call("CreateInvoice", status="SUCCESS", invoice_id="INV-001")
@@ -115,6 +113,7 @@ logger.log_rabbitmq_event("MESSAGE_RECEIVED", status="IN_PROGRESS", queue="payme
 ```
 
 **Database Helpers** (`db_helpers.py`):
+
 - `create_invoice()` — Mit Existierungsprüfung
 - `get_invoice_or_none()` — Safe Get
 - `update_invoice_status()` — Status ändern
@@ -122,6 +121,7 @@ logger.log_rabbitmq_event("MESSAGE_RECEIVED", status="IN_PROGRESS", queue="payme
 - `delete_invoice()` — Mit Validierung
 
 **RabbitMQ Wrapper** (`rabbitmq_helpers.py`):
+
 - `connect()` — Connection mit Retries
 - `declare_queue()` — Queue sicherstellen
 - `publish_message()` — Message publishen
@@ -130,9 +130,58 @@ logger.log_rabbitmq_event("MESSAGE_RECEIVED", status="IN_PROGRESS", queue="payme
 
 ---
 
-## 🐳 Container Setup
+## Invoice-Datenobjekt
+
+Die fachliche Rechnung wird im Projekt an drei Stellen abgebildet:
+
+- als SQLAlchemy-Model in `app/models/invoice.py`
+- als gRPC-Message `Invoice` in `app/proto/invoice.proto`
+- als Python-Objekt aus den generierten Stubs in `app/generated/invoice_pb2.py`
+
+### Fachliche Felder
+
+| Feld | Typ | Beschreibung |
+| ---- | --- | ------------ |
+| `id` | `string` | Eindeutige Rechnungs-ID |
+| `supplier` | `string` | Lieferant oder Rechnungsaussteller |
+| `amount` | `double` | Rechnungsbetrag |
+| `created_at` | `string` | Erstellzeitpunkt als ISO-String |
+| `updated_at` | `string` | Letzte Änderung als ISO-String |
+| `status` | `string` | Status der Rechnung, z. B. `pending`, `paid`, `cancelled` |
+
+### Lebenszyklus im System
+
+```text
+Client sendet CreateInvoice
+       ↓
+gRPC Server erstellt Invoice-Objekt
+       ↓
+SQLAlchemy speichert in PostgreSQL
+       ↓
+GetInvoice / ListInvoices lesen dieselben Felder wieder aus
+       ↓
+Payment Service aktualisiert nur den Status über gRPC
+```
+
+### Beispielstruktur
+
+```python
+{
+    "id": "INV-001",
+    "supplier": "Acme Corp",
+    "amount": 1250.0,
+    "created_at": "2026-04-10T13:00:00+00:00",
+    "updated_at": "2026-04-10T13:05:00+00:00",
+    "status": "paid"
+}
+```
+
+---
+
+## Container Setup
 
 Voraussetzungen:
+
 - Docker
 - Docker Compose Plugin
 
@@ -142,7 +191,7 @@ Voraussetzungen:
 docker compose up -d --build
 ```
 
-### 2. Status pruefen
+### 2. Status der Container prüfen
 
 ```bash
 docker compose ps
@@ -158,7 +207,7 @@ user: guest
 pass: guest
 ```
 
-### 4. pgAdmin fuer PostgreSQL
+### 4. pgAdmin für PostgreSQL
 
 ```text
 http://localhost:5050
@@ -167,13 +216,14 @@ pass: admin123
 ```
 
 Nach dem Login den PostgreSQL-Server manuell anlegen:
+
 - Host: `postgres`
 - Port: `5432`
 - Maintenance DB: `invoice_db`
 - User: `invoice_user`
 - Password: `invoice_password`
 
-### 5. Postgres pruefen
+### 5. Postgres prüfen
 
 ```bash
 docker compose exec postgres psql -U invoice_user -d invoice_db -c "\dt"
@@ -182,7 +232,7 @@ docker compose exec postgres psql -U invoice_user -d invoice_db -c "select * fro
 
 Hinweis: Die Tabelle `invoices` wird vom gRPC Service beim Start automatisch angelegt (SQLAlchemy `create_all`).
 
-### 6. Client ausfuehren
+### 6. Client ausführen
 
 Lokal im Host:
 
@@ -206,13 +256,13 @@ Windows (PowerShell):
 python client/test_client.py
 ```
 
-Wenn noetig vorher in einer venv:
+Wenn nötig vorher in einer venv:
 
 ```bash
 pip install -r requirements.txt
 ```
 
-## ⌨️ Wichtige Befehle
+## Wichtige Befehle
 
 ```bash
 # Start
