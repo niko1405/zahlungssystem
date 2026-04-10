@@ -3,7 +3,7 @@
 
 set -e
 
-echo "🔨 Generating gRPC Python code from protobuf files..."
+echo "Generating gRPC Python code from protobuf files..."
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$SCRIPT_DIR"

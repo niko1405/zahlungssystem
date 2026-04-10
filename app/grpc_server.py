@@ -27,6 +27,7 @@ from app.utils import (
     get_invoice_or_none,
     list_invoices,
     update_invoice,
+    update_invoice_status,
 )
 
 from .generated import invoice_pb2, invoice_pb2_grpc
@@ -236,6 +237,48 @@ class InvoiceServiceServicer(invoice_pb2_grpc.InvoiceServiceServicer):
         except SQLAlchemyError as exc:
             logger.log_error("DeleteInvoice failed", exc_info=exc, invoice_id=request.id)
             context.abort(grpc.StatusCode.INTERNAL, "Error deleting invoice")
+
+    def UpdateInvoiceStatus(self, request, context):
+        """Update status for one invoice.
+
+        Args:
+            request: UpdateInvoiceStatusRequest protobuf message.
+            context: gRPC ServicerContext.
+
+        Returns:
+            Protobuf response containing update result and updated invoice.
+
+        Raises:
+            grpc.RpcError: Forwarded when context.abort is called.
+            SQLAlchemyError: For database update failures.
+            ValueError: For invalid status values.
+            TypeError: For invalid request payload types.
+        """
+        logger.log_grpc_call(
+            "UpdateInvoiceStatus",
+            status="IN_PROGRESS",
+            invoice_id=request.id,
+            new_status=request.status,
+        )
+        try:
+            updated = update_invoice_status(self.db, request.id, request.status)
+            if not updated:
+                context.abort(grpc.StatusCode.NOT_FOUND, "Invoice not found")
+
+            logger.log_grpc_call(
+                "UpdateInvoiceStatus",
+                status="SUCCESS",
+                invoice_id=request.id,
+                new_status=request.status,
+            )
+            return getattr(PB2, "InvoiceResponse")(  # pyright: ignore[reportAttributeAccessIssue]
+                success=True,
+                message="Invoice status updated successfully",
+                invoice=self._to_proto(updated),
+            )
+        except (SQLAlchemyError, ValueError, TypeError) as exc:
+            logger.log_error("UpdateInvoiceStatus failed", exc_info=exc, invoice_id=request.id)
+            context.abort(grpc.StatusCode.INTERNAL, "Error updating invoice status")
 
     def InitiatePayment(self, request, context):
         """Initiate asynchronous payment processing for an invoice.

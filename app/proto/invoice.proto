@@ -7,6 +7,7 @@ service InvoiceService {
   rpc GetInvoice (GetInvoiceRequest) returns (InvoiceResponse) {}
   rpc ListInvoices (ListInvoicesRequest) returns (ListInvoicesResponse) {}
   rpc UpdateInvoice (UpdateInvoiceRequest) returns (InvoiceResponse) {}
+  rpc UpdateInvoiceStatus (UpdateInvoiceStatusRequest) returns (InvoiceResponse) {}
   rpc DeleteInvoice (DeleteInvoiceRequest) returns (DeleteInvoiceResponse) {}
   rpc InitiatePayment (PaymentRequest) returns (PaymentResponse) {}
 }
@@ -44,6 +45,11 @@ message UpdateInvoiceRequest {
   string id = 1;
   string supplier = 2;
   double amount = 3;
+}
+
+message UpdateInvoiceStatusRequest {
+  string id = 1;
+  string status = 2;
 }
 
 message DeleteInvoiceRequest {

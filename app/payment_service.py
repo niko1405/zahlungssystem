@@ -2,40 +2,34 @@
 
 This service:
     - Connects to RabbitMQ and listens for payment_orders messages
-    - Updates invoice status to "paid" upon successful payment processing
+    - Requests invoice status updates through the gRPC API upon successful payment processing
     - Publishes results to the payment_results queue
     - Uses lazy logging patterns for performance optimization
     - Implements retry logic for RabbitMQ connection failures
 """
 
+# pyright: reportAttributeAccessIssue=false
+
 import json
+import os
 import time
 from datetime import datetime
-from typing import Optional
+from typing import Any, Optional, cast
 
+import grpc
 import pika
-from sqlalchemy.exc import SQLAlchemyError
-from sqlalchemy.orm import Session
-
-# Import database
-from app.config.database import SessionLocal, engine
-from app.models import Base
-from app.models.invoice import Invoice
+from app.generated import invoice_pb2, invoice_pb2_grpc
 
 # Import utilities
 from app.utils import (
     StructuredLogger,
     RabbitMQConnection,
-    get_invoice_or_none,
-    update_invoice_status,
 )
 
 
 # Setup logging
 logger = StructuredLogger.for_module(__name__)
-
-# Create all database tables
-Base.metadata.create_all(bind=engine)
+PB2 = cast(Any, invoice_pb2)
 
 
 class PaymentService:
@@ -45,19 +39,21 @@ class PaymentService:
         1. Connects to RabbitMQ and declares queues
         2. Consumes messages from payment_orders queue
         3. Validates invoices and processes payments
-        4. Updates database with payment status
+        4. Calls gRPC service to update invoice status
         5. Publishes results to payment_results queue
     """
     
     def __init__(self):
-        """Initialize the payment service with database and RabbitMQ connections.
+        """Initialize the payment service with gRPC and RabbitMQ connections.
 
         Raises:
             RuntimeError: If infrastructure setup fails.
             pika.exceptions.AMQPError: If RabbitMQ connection cannot be established.
         """
-        self.db: Session = SessionLocal()
         self.rmq = RabbitMQConnection()
+        self.grpc_target = os.getenv("GRPC_SERVER_TARGET", "grpc-server:50051")
+        self.grpc_channel = grpc.insecure_channel(self.grpc_target)
+        self.grpc_stub: Any = invoice_pb2_grpc.InvoiceServiceStub(self.grpc_channel)
         
         logger.log_debug("Initializing PaymentService")
         self._setup_infrastructure()
@@ -84,6 +80,50 @@ class PaymentService:
                 exc_info=e
             )
             raise
+
+    def _grpc_get_invoice(self, invoice_id: str):
+        """Fetch invoice through gRPC API.
+
+        Args:
+            invoice_id: Target invoice identifier.
+
+        Returns:
+            Invoice payload from gRPC response or None when not found/error.
+        """
+        try:
+            response = self.grpc_stub.GetInvoice(
+                getattr(PB2, "GetInvoiceRequest")(id=invoice_id),
+                timeout=5,
+            )
+            return response.invoice
+        except grpc.RpcError as e:
+            logger.log_error("gRPC GetInvoice failed", exc_info=e, invoice_id=invoice_id)
+            return None
+
+    def _grpc_update_invoice_status(self, invoice_id: str, status: str) -> bool:
+        """Update invoice status through gRPC API.
+
+        Args:
+            invoice_id: Target invoice identifier.
+            status: New status value.
+
+        Returns:
+            bool: True on success, False otherwise.
+        """
+        try:
+            getattr(self.grpc_stub, "UpdateInvoiceStatus")(
+                getattr(PB2, "UpdateInvoiceStatusRequest")(id=invoice_id, status=status),
+                timeout=5,
+            )
+            return True
+        except grpc.RpcError as e:
+            logger.log_error(
+                "gRPC UpdateInvoiceStatus failed",
+                exc_info=e,
+                invoice_id=invoice_id,
+                new_status=status,
+            )
+            return False
     
     def _process_payment_message(self, body: str) -> Optional[dict]:
         """Parse and validate a payment order message.
@@ -128,7 +168,7 @@ class PaymentService:
         Returns:
             True if invoice exists, False otherwise
         """
-        invoice = get_invoice_or_none(self.db, invoice_id)
+        invoice = self._grpc_get_invoice(invoice_id)
         
         if not invoice:
             logger.log_warning("Invoice not found", invoice_id=invoice_id)
@@ -177,42 +217,27 @@ class PaymentService:
             )
             return False
     
-    def _update_database(self, invoice_id: str) -> Optional['Invoice']:
-        """Update invoice status to "paid".
+    def _update_invoice_status(self, invoice_id: str) -> bool:
+        """Update invoice status to "paid" through gRPC.
         
         Args:
             invoice_id: ID of invoice to update
             
         Returns:
-            Updated Invoice object or None if not found
-
-        Raises:
-            SQLAlchemyError: Captured internally for database update errors.
+            bool: True if status update succeeded, False otherwise.
         """
-        try:
-            invoice = update_invoice_status(self.db, invoice_id, "paid")
-            
-            if not invoice:
-                logger.log_warning("Failed to update invoice status", invoice_id=invoice_id)
-                return None
-            
-            logger.log_db_operation(
-                "UPDATE",
-                "invoice_status",
-                status="SUCCESS",
-                invoice_id=invoice_id,
-                new_status="paid"
-            )
-            
-            return invoice
-            
-        except SQLAlchemyError as e:
-            logger.log_error(
-                "Database update failed",
-                exc_info=e,
-                invoice_id=invoice_id
-            )
-            return None
+        success = self._grpc_update_invoice_status(invoice_id, "paid")
+        if not success:
+            logger.log_warning("Failed to update invoice status via gRPC", invoice_id=invoice_id)
+            return False
+
+        logger.log_grpc_call(
+            "UpdateInvoiceStatus",
+            status="SUCCESS",
+            invoice_id=invoice_id,
+            new_status="paid",
+        )
+        return True
     
     def _send_payment_result(self, payment_id: str, invoice_id: str, success: bool, message: str) -> None:
         """Send payment result to RabbitMQ.
@@ -264,7 +289,7 @@ class PaymentService:
             1. Parses the message
             2. Validates the invoice
             3. Simulates payment processing
-            4. Updates the database
+            4. Calls gRPC to update invoice status
             5. Sends result back via RabbitMQ
             6. Acknowledges the message
         
@@ -316,15 +341,15 @@ class PaymentService:
                 ch.basic_nack(delivery_tag=method.delivery_tag, requeue=True)
                 return
             
-            # Update database
-            invoice = self._update_database(payment_order['invoice_id'])
-            
-            if not invoice:
+            # Update invoice through gRPC (instead of direct DB write)
+            updated = self._update_invoice_status(payment_order['invoice_id'])
+
+            if not updated:
                 self._send_payment_result(
                     payment_order['id'],
                     payment_order['invoice_id'],
                     False,
-                    "Database update failed"
+                    "Invoice status update failed"
                 )
                 ch.basic_nack(delivery_tag=method.delivery_tag, requeue=True)
                 return
@@ -382,6 +407,8 @@ class PaymentService:
                 exc_info=e
             )
             raise
+        finally:
+            self.grpc_channel.close()
 
 
 def main() -> None:
@@ -390,13 +417,13 @@ def main() -> None:
     Raises:
         RuntimeError: If service bootstrap fails.
         pika.exceptions.AMQPError: If RabbitMQ initialization fails.
-        SQLAlchemyError: If database initialization fails.
+        grpc.RpcError: If gRPC calls fail during service lifecycle.
     """
     try:
         logger.log_debug("Starting Payment Service")
         service = PaymentService()
         service.start()
-    except (RuntimeError, pika.exceptions.AMQPError, SQLAlchemyError) as e:
+    except (RuntimeError, pika.exceptions.AMQPError, grpc.RpcError) as e:
         logger.log_error(
             "Payment Service failed to start",
             exc_info=e

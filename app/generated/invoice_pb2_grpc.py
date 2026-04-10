@@ -54,6 +54,11 @@ class InvoiceServiceStub(object):
                 request_serializer=invoice__pb2.UpdateInvoiceRequest.SerializeToString,
                 response_deserializer=invoice__pb2.InvoiceResponse.FromString,
                 _registered_method=True)
+        self.UpdateInvoiceStatus = channel.unary_unary(
+                '/invoice.InvoiceService/UpdateInvoiceStatus',
+                request_serializer=invoice__pb2.UpdateInvoiceStatusRequest.SerializeToString,
+                response_deserializer=invoice__pb2.InvoiceResponse.FromString,
+                _registered_method=True)
         self.DeleteInvoice = channel.unary_unary(
                 '/invoice.InvoiceService/DeleteInvoice',
                 request_serializer=invoice__pb2.DeleteInvoiceRequest.SerializeToString,
@@ -93,6 +98,12 @@ class InvoiceServiceServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def UpdateInvoiceStatus(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
     def DeleteInvoice(self, request, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
@@ -126,6 +137,11 @@ def add_InvoiceServiceServicer_to_server(servicer, server):
             'UpdateInvoice': grpc.unary_unary_rpc_method_handler(
                     servicer.UpdateInvoice,
                     request_deserializer=invoice__pb2.UpdateInvoiceRequest.FromString,
+                    response_serializer=invoice__pb2.InvoiceResponse.SerializeToString,
+            ),
+            'UpdateInvoiceStatus': grpc.unary_unary_rpc_method_handler(
+                    servicer.UpdateInvoiceStatus,
+                    request_deserializer=invoice__pb2.UpdateInvoiceStatusRequest.FromString,
                     response_serializer=invoice__pb2.InvoiceResponse.SerializeToString,
             ),
             'DeleteInvoice': grpc.unary_unary_rpc_method_handler(
@@ -246,6 +262,33 @@ class InvoiceService(object):
             target,
             '/invoice.InvoiceService/UpdateInvoice',
             invoice__pb2.UpdateInvoiceRequest.SerializeToString,
+            invoice__pb2.InvoiceResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def UpdateInvoiceStatus(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/invoice.InvoiceService/UpdateInvoiceStatus',
+            invoice__pb2.UpdateInvoiceStatusRequest.SerializeToString,
             invoice__pb2.InvoiceResponse.FromString,
             options,
             channel_credentials,
