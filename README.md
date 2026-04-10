@@ -22,9 +22,9 @@ Moderne, verteilte Architektur für Rechnungsverarbeitung und asynchrone Zahlung
        │ SQL                            │ publish to payment_orders                     │
        ▼                                ▼                                               │
 ┌────────────────────┐        ┌────────────────────────────────────┐      ┌────────────────────────────┐
-│   PostgreSQL       │        │        RabbitMQ - 15672            │      │  PAYMENT SERVICE - 50051   │
-│  (invoice_db)      │        │                                    │      │ (app/payment_service.py)   │
-|                    │        │                                    │      │                            │   
+│ PostgreSQL - 5050  │        │        RabbitMQ - 15672            │      │  PAYMENT SERVICE - 50051   │
+│                    │        │                                    │      │ (app/payment_service.py)   │
+|   (invoice_db)     │        │                                    │      │                            │   
 │                    │        │  ┌──────────────────────────────┐  │cons. │  1. Parse Message          │
 └────────────────────┘        │  │     payment_orders queue     │--│----->│  2. Validate Invoice       │
                               │  └──────────────────────────────┘  │      │  3. Process Payment        │
