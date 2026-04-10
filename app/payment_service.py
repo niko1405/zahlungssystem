@@ -341,7 +341,7 @@ class PaymentService:
                 ch.basic_nack(delivery_tag=method.delivery_tag, requeue=True)
                 return
             
-            # Update invoice through gRPC (instead of direct DB write)
+            # Update invoice through gRPC
             updated = self._update_invoice_status(payment_order['invoice_id'])
 
             if not updated:
