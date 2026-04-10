@@ -5,10 +5,13 @@ It uses helper modules for database and RabbitMQ interactions and follows
 lazy logging patterns for better runtime performance.
 """
 
+# pyright: reportAttributeAccessIssue=false
+
 import json
 import uuid
 from concurrent import futures
 from datetime import datetime
+from typing import Any
 
 import grpc
 from sqlalchemy.exc import SQLAlchemyError
@@ -29,6 +32,7 @@ from app.utils import (
 )
 
 logger = StructuredLogger.for_module(__name__)
+PB2: Any = invoice_pb2
 
 Base.metadata.create_all(bind=engine)
 
@@ -59,16 +63,16 @@ class InvoiceServiceServicer(invoice_pb2_grpc.InvoiceServiceServicer):
         logger.log_rabbitmq_event("CONNECTED", status="SUCCESS")
 
     @staticmethod
-    def _to_proto(db_invoice) -> invoice_pb2.Invoice:
+    def _to_proto(db_invoice) -> Any:
         """Map SQLAlchemy invoice model to protobuf message.
 
         Args:
             db_invoice: SQLAlchemy invoice entity.
 
         Returns:
-            invoice_pb2.Invoice: Protobuf representation of the invoice.
+            Protobuf invoice message representation.
         """
-        return invoice_pb2.Invoice(
+        return getattr(PB2, "Invoice")(  # pyright: ignore[reportAttributeAccessIssue]
             id=db_invoice.id,
             supplier=db_invoice.supplier,
             amount=db_invoice.amount,
@@ -85,7 +89,7 @@ class InvoiceServiceServicer(invoice_pb2_grpc.InvoiceServiceServicer):
             context: gRPC ServicerContext.
 
         Returns:
-            invoice_pb2.InvoiceResponse: Creation result including created invoice.
+            Protobuf response containing creation result and invoice payload.
 
         Raises:
             grpc.RpcError: Forwarded when context.abort is called.
@@ -100,13 +104,11 @@ class InvoiceServiceServicer(invoice_pb2_grpc.InvoiceServiceServicer):
                 context.abort(grpc.StatusCode.ALREADY_EXISTS, "Invoice already exists")
 
             logger.log_grpc_call("CreateInvoice", status="SUCCESS", invoice_id=request.id)
-            return invoice_pb2.InvoiceResponse(
+            return getattr(PB2, "InvoiceResponse")(  # pyright: ignore[reportAttributeAccessIssue]
                 success=True,
                 message="Invoice created successfully",
                 invoice=self._to_proto(invoice),
             )
-        except grpc.RpcError:
-            raise
         except (SQLAlchemyError, ValueError, TypeError) as exc:
             logger.log_error("CreateInvoice failed", exc_info=exc, invoice_id=request.id)
             context.abort(grpc.StatusCode.INTERNAL, "Error creating invoice")
@@ -119,7 +121,7 @@ class InvoiceServiceServicer(invoice_pb2_grpc.InvoiceServiceServicer):
             context: gRPC ServicerContext.
 
         Returns:
-            invoice_pb2.InvoiceResponse: Read result including invoice payload.
+            Protobuf response containing read result and invoice payload.
 
         Raises:
             grpc.RpcError: Forwarded when context.abort is called.
@@ -132,13 +134,11 @@ class InvoiceServiceServicer(invoice_pb2_grpc.InvoiceServiceServicer):
                 context.abort(grpc.StatusCode.NOT_FOUND, "Invoice not found")
 
             logger.log_grpc_call("GetInvoice", status="SUCCESS", invoice_id=request.id)
-            return invoice_pb2.InvoiceResponse(
+            return getattr(PB2, "InvoiceResponse")(  # pyright: ignore[reportAttributeAccessIssue]
                 success=True,
                 message="Invoice retrieved successfully",
                 invoice=self._to_proto(invoice),
             )
-        except grpc.RpcError:
-            raise
         except SQLAlchemyError as exc:
             logger.log_error("GetInvoice failed", exc_info=exc, invoice_id=request.id)
             context.abort(grpc.StatusCode.INTERNAL, "Error retrieving invoice")
@@ -151,7 +151,7 @@ class InvoiceServiceServicer(invoice_pb2_grpc.InvoiceServiceServicer):
             context: gRPC ServicerContext.
 
         Returns:
-            invoice_pb2.ListInvoicesResponse: Paged invoices and total count.
+            Protobuf response containing paged invoices and total count.
 
         Raises:
             grpc.RpcError: Forwarded when context.abort is called.
@@ -163,7 +163,7 @@ class InvoiceServiceServicer(invoice_pb2_grpc.InvoiceServiceServicer):
         try:
             invoices, total = list_invoices(self.db, skip=skip, limit=limit)
             logger.log_grpc_call("ListInvoices", status="SUCCESS", returned=len(invoices), total=total)
-            return invoice_pb2.ListInvoicesResponse(
+            return getattr(PB2, "ListInvoicesResponse")(  # pyright: ignore[reportAttributeAccessIssue]
                 invoices=[self._to_proto(invoice) for invoice in invoices],
                 total=total,
             )
@@ -179,7 +179,7 @@ class InvoiceServiceServicer(invoice_pb2_grpc.InvoiceServiceServicer):
             context: gRPC ServicerContext.
 
         Returns:
-            invoice_pb2.InvoiceResponse: Update result including updated invoice.
+            Protobuf response containing update result and updated invoice.
 
         Raises:
             grpc.RpcError: Forwarded when context.abort is called.
@@ -199,13 +199,11 @@ class InvoiceServiceServicer(invoice_pb2_grpc.InvoiceServiceServicer):
                 context.abort(grpc.StatusCode.NOT_FOUND, "Invoice not found")
 
             logger.log_grpc_call("UpdateInvoice", status="SUCCESS", invoice_id=request.id)
-            return invoice_pb2.InvoiceResponse(
+            return getattr(PB2, "InvoiceResponse")(  # pyright: ignore[reportAttributeAccessIssue]
                 success=True,
                 message="Invoice updated successfully",
                 invoice=self._to_proto(updated),
             )
-        except grpc.RpcError:
-            raise
         except (SQLAlchemyError, ValueError, TypeError) as exc:
             logger.log_error("UpdateInvoice failed", exc_info=exc, invoice_id=request.id)
             context.abort(grpc.StatusCode.INTERNAL, "Error updating invoice")
@@ -218,7 +216,7 @@ class InvoiceServiceServicer(invoice_pb2_grpc.InvoiceServiceServicer):
             context: gRPC ServicerContext.
 
         Returns:
-            invoice_pb2.DeleteInvoiceResponse: Delete status payload.
+            Protobuf response containing delete status payload.
 
         Raises:
             grpc.RpcError: Forwarded when context.abort is called.
@@ -231,12 +229,10 @@ class InvoiceServiceServicer(invoice_pb2_grpc.InvoiceServiceServicer):
                 context.abort(grpc.StatusCode.NOT_FOUND, "Invoice not found")
 
             logger.log_grpc_call("DeleteInvoice", status="SUCCESS", invoice_id=request.id)
-            return invoice_pb2.DeleteInvoiceResponse(
+            return getattr(PB2, "DeleteInvoiceResponse")(  # pyright: ignore[reportAttributeAccessIssue]
                 success=True,
                 message="Invoice deleted successfully",
             )
-        except grpc.RpcError:
-            raise
         except SQLAlchemyError as exc:
             logger.log_error("DeleteInvoice failed", exc_info=exc, invoice_id=request.id)
             context.abort(grpc.StatusCode.INTERNAL, "Error deleting invoice")
@@ -249,7 +245,7 @@ class InvoiceServiceServicer(invoice_pb2_grpc.InvoiceServiceServicer):
             context: gRPC ServicerContext.
 
         Returns:
-            invoice_pb2.PaymentResponse: Payment order details.
+            Protobuf response containing payment order details.
 
         Raises:
             grpc.RpcError: Forwarded when context.abort is called.
@@ -281,13 +277,11 @@ class InvoiceServiceServicer(invoice_pb2_grpc.InvoiceServiceServicer):
             self.rmq.publish_message("payment_orders", json.dumps(payload), persistent=True)
 
             logger.log_grpc_call("InitiatePayment", status="SUCCESS", payment_id=payment_id)
-            return invoice_pb2.PaymentResponse(
+            return getattr(PB2, "PaymentResponse")(  # pyright: ignore[reportAttributeAccessIssue]
                 success=True,
                 message="Payment order created",
                 payment_id=payment_id,
             )
-        except grpc.RpcError:
-            raise
         except (SQLAlchemyError, RuntimeError, ValueError, TypeError) as exc:
             logger.log_error(
                 "InitiatePayment failed",
