@@ -158,7 +158,22 @@ user: guest
 pass: guest
 ```
 
-### 4. Postgres pruefen
+### 4. pgAdmin fuer PostgreSQL
+
+```text
+http://localhost:5050
+email: admin@example.com
+pass: admin123
+```
+
+Nach dem Login den PostgreSQL-Server manuell anlegen:
+- Host: `postgres`
+- Port: `5432`
+- Maintenance DB: `invoice_db`
+- User: `invoice_user`
+- Password: `invoice_password`
+
+### 5. Postgres pruefen
 
 ```bash
 docker compose exec postgres psql -U invoice_user -d invoice_db -c "\dt"
@@ -167,7 +182,7 @@ docker compose exec postgres psql -U invoice_user -d invoice_db -c "select * fro
 
 Hinweis: Die Tabelle `invoices` wird vom gRPC Service beim Start automatisch angelegt (SQLAlchemy `create_all`).
 
-### 5. Client ausfuehren
+### 6. Client ausfuehren
 
 Lokal im Host:
 

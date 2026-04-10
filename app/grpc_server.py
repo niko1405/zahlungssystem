@@ -17,19 +17,19 @@ import grpc
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
-from .generated import invoice_pb2
-from .generated import invoice_pb2_grpc
 from app.config.database import SessionLocal, engine
 from app.models import Base
 from app.utils import (
-    StructuredLogger,
     RabbitMQConnection,
+    StructuredLogger,
     create_invoice,
     delete_invoice,
     get_invoice_or_none,
     list_invoices,
     update_invoice,
 )
+
+from .generated import invoice_pb2, invoice_pb2_grpc
 
 logger = StructuredLogger.for_module(__name__)
 PB2: Any = invoice_pb2

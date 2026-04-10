@@ -31,7 +31,7 @@ class RabbitMQConnection:
         """
         self.rabbitmq_url = rabbitmq_url or os.getenv(
             "RABBITMQ_URL",
-            "amqp://guest:guest@rabbitmq:5672/"
+            "amqp://guest:guest@rabbitmq:5672/%2F?heartbeat=300&blocked_connection_timeout=300"
         )
         self.connection: Optional[blocking_connection.BlockingConnection] = None
         self.channel: Optional[pika.channel.Channel] = None

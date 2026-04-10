@@ -42,7 +42,7 @@ services:
       dockerfile: Dockerfile.grpc_server
     environment:
       DATABASE_URL: postgresql://invoice_user:invoice_password@postgres:5432/invoice_db
-      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/%2F?heartbeat=300&blocked_connection_timeout=300
       PYTHONPATH: /app/app
     ports:
       - "50051:50051"
@@ -61,7 +61,7 @@ services:
       dockerfile: Dockerfile.payment_service
     environment:
       DATABASE_URL: postgresql://invoice_user:invoice_password@postgres:5432/invoice_db
-      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/%2F?heartbeat=300&blocked_connection_timeout=300
       PYTHONPATH: /app/app
     depends_on:
       postgres:
@@ -71,9 +71,27 @@ services:
     networks:
       - invoice_network
 
+  # pgAdmin Web UI for PostgreSQL
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@example.com
+      PGADMIN_DEFAULT_PASSWORD: admin123
+      PGADMIN_CONFIG_SERVER_MODE: "True"
+    ports:
+      - "5050:80"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - invoice_network
+
 volumes:
   postgres_data:
   rabbitmq_data:
+  pgadmin_data:
 
 networks:
   invoice_network:
