@@ -12,23 +12,25 @@ Moderne, verteilte Architektur für Rechnungsverarbeitung und asynchrone Zahlung
                          │  save invoices
                          ▼  initiate payment
 ┌─────────────────────────────────────────────────────────────┐
-│              gRPC SERVER (Port 50051)                       │
-│             (app/grpc_server.py)                            │
+│                  gRPC SERVER - 50051                        │
+│                  (app/grpc_server.py)                       │
+│                                                             │                       
 │   • CreateInvoice / GetInvoice / UpdateInvoice              │   update invoice status
 │   • ListInvoices / DeleteInvoice /UpdateStatusInvoice       │<------------------------| 
 │   • InitiatePayment (→ RabbitMQ)                            │                         │
 └──────┬────────────────────────────────┬─────────────────────┘                         │
        │ SQL                            │ publish to payment_orders                     │
        ▼                                ▼                                               │
-┌────────────────────┐        ┌────────────────────────────────────┐      ┌──────────────────────────┐
-│   PostgreSQL       │        │               RabbitMQ             │      │  PAYMENT SERVICE         │
-│  (invoice_db)      │        │                                    │      │ (app/payment_service.py) │
-│                    │        │  ┌──────────────────────────────┐  │cons. │  1. Parse Message        │
-└────────────────────┘        │  │     payment_orders queue     │--│----->│  2. Validate Invoice     │
-                              │  └──────────────────────────────┘  │      │  3. Process Payment      │
-                              │  ┌──────────────────────────────┐  │publ. │  4. Update via gRPC      │
-                              │  │    payment_results queue     │<-│------│  5. Publish Result       │
-                              │  └──────────────────────────────┘  │      └──────────────────────────┘
+┌────────────────────┐        ┌────────────────────────────────────┐      ┌────────────────────────────┐
+│   PostgreSQL       │        │        RabbitMQ - 15672            │      │  PAYMENT SERVICE - 50051   │
+│  (invoice_db)      │        │                                    │      │ (app/payment_service.py)   │
+|                    │        │                                    │      │                            │   
+│                    │        │  ┌──────────────────────────────┐  │cons. │  1. Parse Message          │
+└────────────────────┘        │  │     payment_orders queue     │--│----->│  2. Validate Invoice       │
+                              │  └──────────────────────────────┘  │      │  3. Process Payment        │
+                              │  ┌──────────────────────────────┐  │publ. │  4. Update via gRPC        │
+                              │  │    payment_results queue     │<-│------│  5. Publish Result         │
+                              │  └──────────────────────────────┘  │      └────────────────────────────┘
                               └────────────────────────────────────┘
 
                  
