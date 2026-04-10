@@ -1,100 +1,97 @@
-# Rechnungsbearbeitung
+# Rechnungsbearbeitung (gRPC + RabbitMQ + Docker)
+
+Enthaltene Komponenten:
+- gRPC Server fuer Rechnungsmetadaten
+- Payment Service als RabbitMQ Consumer
+- PostgreSQL als Persistenz
+- RabbitMQ als Message Broker
+- Test-Client fuer End-to-End Ablauf
 
 ## Architektur
 
-### FastAPI Backend mit PostgreSQL
-Ein vollständiges FastAPI Projekt mit Router, Service und Repository Schichten für die Verwaltung von Rechnungsmetadaten.
+- gRPC Server auf Port 50051
+- RabbitMQ auf Ports 5672 (AMQP) und 15672 (UI)
+- PostgreSQL auf Port 5432
 
-#### Projektstruktur:
-```
-app/
-  config/
-    database.py      # Datenbankkonfiguration
-  models/
-    invoice.py       # SQLAlchemy Modelle
-  schemas/
-    invoice.py       # Pydantic Schemas
-  repository/
-    invoice_repository.py  # Datenbankzugriffsschicht
-  services/
-    invoice_service.py     # Business-Logik Schicht
-  routers/
-    invoice_router.py      # API Endpunkte
-  main.py                 # FastAPI Anwendung
+## Container Setup
+
+Voraussetzungen:
+- Docker
+- Docker Compose Plugin
+
+### 1. Alles bauen und starten
+
+```bash
+docker compose up -d --build
 ```
 
-#### Installation mit uv (empfohlen):
-```shell
-uv sync
-# oder für Entwicklung mit dev dependencies:
-uv sync --dev
+### 2. Status pruefen
+
+```bash
+docker compose ps
+docker compose logs -f grpc-server
+docker compose logs -f payment-service
 ```
 
-#### Alternative Installation mit pip:
-```shell
+### 3. RabbitMQ UI
+
+```text
+http://localhost:15672
+user: guest
+pass: guest
+```
+
+### 4. Postgres pruefen
+
+```bash
+docker compose exec postgres psql -U invoice_user -d invoice_db -c "\dt"
+docker compose exec postgres psql -U invoice_user -d invoice_db -c "select * from invoices;"
+```
+
+Hinweis: Die Tabelle `invoices` wird vom gRPC Service beim Start automatisch angelegt (SQLAlchemy `create_all`).
+
+### 5. Client ausfuehren
+
+Lokal im Host:
+
+```bash
+python client/test_client.py
+```
+
+Wenn `python` im Host nicht gefunden wird, nutze die Projekt-venv:
+
+Linux/macOS:
+
+```bash
+source .venv/bin/activate
+python client/test_client.py
+```
+
+Windows (PowerShell):
+
+```powershell
+.venv\Scripts\Activate.ps1
+python client/test_client.py
+```
+
+Wenn noetig vorher in einer venv:
+
+```bash
 pip install -r requirements.txt
 ```
 
-#### Datenbank Setup:
-1. PostgreSQL Datenbank erstellen
-2. `.env` Datei erstellen mit:
-```
-DATABASE_URL=postgresql://user:password@localhost/invoice_db
-```
+## Wichtige Befehle
 
-#### Server starten (mit uv):
-```shell
-uv run uvicorn app.main:app --reload
+```bash
+# Start
+docker compose up -d --build
+
+# Logs
+docker compose logs -f
+
+# Stop
+docker compose down
+
+# Komplett reset inkl. DB Daten
+docker compose down -v
 ```
-
-#### Alternative Server starten (mit pip):
-```shell
-uvicorn app.main:app --reload
-```
-
-#### API Endpunkte:
-- `POST /invoices/` - Rechnung erstellen
-- `GET /invoices/{id}` - Rechnung abrufen
-- `GET /invoices/` - Alle Rechnungen abrufen
-- `PUT /invoices/{id}` - Rechnung aktualisieren
-- `DELETE /invoices/{id}` - Rechnung löschen
-
-#### API Dokumentation:
-- Swagger UI: `http://localhost:8000/docs`
-- ReDoc: `http://localhost:8000/redoc`
-
-### Legacy gRPC Service (RabbitMQ)
-Die alten gRPC Dateien wurden in den `legacy/` Ordner verschoben und sind nicht mehr Teil des Hauptprojekts.
-
-- RabbitMQ als Docker Container starten:
-```shell
-docker run -d --hostname rabbit --name rabbitmq -p 5672:5672 -p 15672:15672 rabbitmq:3-management
-```
-
-#### Installation:
-```shell
-pip install grpcio grpcio-tools pika
-```
-
-#### Testen (genau diese Reihenfolge!)
-1. gRPC Server starten:
-```shell
-python legacy/grpc_server.py
-```
-2. Rechnung erstellen:
-```shell
-python legacy/grpc_client.py
-```
-
-3. Payment Service starten:
-```shell
-python legacy/payment_service.py
-```
-4. Zahlung senden:
-```shell
-python legacy/payment_sender.py
-```
-
-#### Ergebnis:
-- "Rechnung gespeichert" im gRPC Server
-- "Zahlung verarbeitet für Rechnung 1 Betrag 100" im Payment Service
