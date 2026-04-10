@@ -1,0 +1,24 @@
+syntax = "proto3";
+
+package payment;
+
+// Messages für RabbitMQ Payment Queue
+
+message PaymentOrder {
+  string id = 1;  // Payment ID (UUID)
+  string invoice_id = 2;
+  double amount = 3;
+  string payment_method = 4;  // "transfer", "card", "direct_debit"
+  int64 timestamp = 5;  // Unix timestamp
+  string status = 6;  // "pending", "processing", "completed", "failed"
+  string requested_by = 7;  // User/Service that requested the payment
+}
+
+message PaymentResult {
+  string payment_id = 1;
+  string invoice_id = 2;
+  bool success = 3;
+  string status = 4;  // "completed", "failed"
+  string message = 5;  // Error message if failed
+  int64 processed_at = 6;  // Unix timestamp
+}

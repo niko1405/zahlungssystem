@@ -1,0 +1,23 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Install protobuf compiler
+RUN apt-get update && apt-get install -y protobuf-compiler && rm -rf /var/lib/apt/lists/*
+
+# Copy requirements
+COPY requirements.txt .
+
+# Install Python dependencies
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy application code
+COPY app/ ./app/
+COPY client/ ./client/
+
+# Generate gRPC Python code from proto files
+RUN python -m grpc_tools.protoc -I./app/proto --python_out=./app --grpc_python_out=./app ./app/proto/invoice.proto
+RUN python -m grpc_tools.protoc -I./app/proto --python_out=./app --grpc_python_out=./app ./app/proto/payment.proto
+
+# Run test client
+CMD ["python", "client/test_client.py"]

@@ -1,0 +1,74 @@
+syntax = "proto3";
+
+package invoice;
+
+service InvoiceService {
+  rpc CreateInvoice (CreateInvoiceRequest) returns (InvoiceResponse) {}
+  rpc GetInvoice (GetInvoiceRequest) returns (InvoiceResponse) {}
+  rpc ListInvoices (ListInvoicesRequest) returns (ListInvoicesResponse) {}
+  rpc UpdateInvoice (UpdateInvoiceRequest) returns (InvoiceResponse) {}
+  rpc DeleteInvoice (DeleteInvoiceRequest) returns (DeleteInvoiceResponse) {}
+  rpc InitiatePayment (PaymentRequest) returns (PaymentResponse) {}
+}
+
+message Invoice {
+  string id = 1;
+  string supplier = 2;
+  double amount = 3;
+  string created_at = 4;
+  string updated_at = 5;
+  string status = 6;  // "pending", "paid", "cancelled"
+}
+
+message CreateInvoiceRequest {
+  string id = 1;
+  string supplier = 2;
+  double amount = 3;
+}
+
+message GetInvoiceRequest {
+  string id = 1;
+}
+
+message ListInvoicesRequest {
+  int32 skip = 1;
+  int32 limit = 2;
+}
+
+message ListInvoicesResponse {
+  repeated Invoice invoices = 1;
+  int32 total = 2;
+}
+
+message UpdateInvoiceRequest {
+  string id = 1;
+  string supplier = 2;
+  double amount = 3;
+}
+
+message DeleteInvoiceRequest {
+  string id = 1;
+}
+
+message DeleteInvoiceResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message InvoiceResponse {
+  bool success = 1;
+  string message = 2;
+  Invoice invoice = 3;
+}
+
+message PaymentRequest {
+  string invoice_id = 1;
+  double amount = 2;
+  string payment_method = 3;  // "transfer", "card", etc.
+}
+
+message PaymentResponse {
+  bool success = 1;
+  string message = 2;
+  string payment_id = 3;
+}
