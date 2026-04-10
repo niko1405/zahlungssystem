@@ -46,7 +46,7 @@ invoice-client/
 └── README.md
 ```
 
-Die einzige Abhängigkeit ist die gRPC-Stub-Datei (`invoice_pb2.py`), 
+Die einzige Abhängigkeit ist die gRPC-Stub-Datei (`app/generated/invoice_pb2.py`), 
 die entweder:
 - Aus dem Hauptprojekt kopiert wird, oder
 - Durch Installation des gRPC-Pakets generiert wird

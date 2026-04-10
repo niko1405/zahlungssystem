@@ -17,8 +17,8 @@ import grpc
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
-import invoice_pb2
-import invoice_pb2_grpc
+from .generated import invoice_pb2
+from .generated import invoice_pb2_grpc
 from app.config.database import SessionLocal, engine
 from app.models import Base
 from app.utils import (

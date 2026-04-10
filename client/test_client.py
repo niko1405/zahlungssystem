@@ -6,14 +6,17 @@ Demonstrates how to use the gRPC Invoice Service
 
 import sys
 import time
+from typing import Any, cast
 import grpc
 
-# Generated protobuf files live in app/ (invoice_pb2*.py)
-sys.path.insert(0, '/app/app')
-sys.path.insert(0, 'app')
+# Make sure generated stubs are importable when run as script or in Docker.
+sys.path.insert(0, "./app")
+sys.path.insert(0, "/app/app")
 
-import invoice_pb2
-import invoice_pb2_grpc
+from generated import invoice_pb2
+from generated import invoice_pb2_grpc
+
+PB2 = cast(Any, invoice_pb2)
 
 
 class InvoiceClient:
@@ -27,7 +30,7 @@ class InvoiceClient:
         """Create a new invoice"""
         print(f"\n📝 Creating invoice: {invoice_id}")
         try:
-            request = invoice_pb2.CreateInvoiceRequest(
+            request = PB2.CreateInvoiceRequest(
                 id=invoice_id,
                 supplier=supplier,
                 amount=amount
@@ -46,7 +49,7 @@ class InvoiceClient:
         """Get an invoice by ID"""
         print(f"\n🔍 Getting invoice: {invoice_id}")
         try:
-            request = invoice_pb2.GetInvoiceRequest(id=invoice_id)
+            request = PB2.GetInvoiceRequest(id=invoice_id)
             response = self.stub.GetInvoice(request, timeout=5)
             print(f"✅ Success: {response.message}")
             print(f"   ID: {response.invoice.id}")
@@ -62,7 +65,7 @@ class InvoiceClient:
         """List all invoices"""
         print(f"\n📋 Listing invoices (skip={skip}, limit={limit})")
         try:
-            request = invoice_pb2.ListInvoicesRequest(skip=skip, limit=limit)
+            request = PB2.ListInvoicesRequest(skip=skip, limit=limit)
             response = self.stub.ListInvoices(request, timeout=5)
             print(f"✅ Found {len(response.invoices)} invoices (total: {response.total})")
             for inv in response.invoices:
@@ -76,7 +79,7 @@ class InvoiceClient:
         """Update an invoice"""
         print(f"\n✏️  Updating invoice: {invoice_id}")
         try:
-            request = invoice_pb2.UpdateInvoiceRequest(
+            request = PB2.UpdateInvoiceRequest(
                 id=invoice_id,
                 supplier=supplier,
                 amount=amount
@@ -93,7 +96,7 @@ class InvoiceClient:
         """Delete an invoice"""
         print(f"\n🗑️  Deleting invoice: {invoice_id}")
         try:
-            request = invoice_pb2.DeleteInvoiceRequest(id=invoice_id)
+            request = PB2.DeleteInvoiceRequest(id=invoice_id)
             response = self.stub.DeleteInvoice(request, timeout=5)
             print(f"✅ Success: {response.message}")
             return response.success
@@ -105,7 +108,7 @@ class InvoiceClient:
         """Initiate a payment for an invoice"""
         print(f"\n💳 Initiating payment for invoice: {invoice_id}")
         try:
-            request = invoice_pb2.PaymentRequest(
+            request = PB2.PaymentRequest(
                 invoice_id=invoice_id,
                 amount=amount,
                 payment_method=payment_method
