@@ -28,7 +28,7 @@ class InvoiceClient:
     
     def create_invoice(self, invoice_id: str, supplier: str, amount: float):
         """Create a new invoice"""
-        print(f"\n📝 Creating invoice: {invoice_id}")
+        print(f"\n Creating invoice: {invoice_id}")
         try:
             request = PB2.CreateInvoiceRequest(
                 id=invoice_id,
@@ -47,7 +47,7 @@ class InvoiceClient:
     
     def get_invoice(self, invoice_id: str):
         """Get an invoice by ID"""
-        print(f"\n🔍 Getting invoice: {invoice_id}")
+        print(f"\n Getting invoice: {invoice_id}")
         try:
             request = PB2.GetInvoiceRequest(id=invoice_id)
             response = self.stub.GetInvoice(request, timeout=5)
@@ -63,7 +63,7 @@ class InvoiceClient:
     
     def list_invoices(self, skip=0, limit=10):
         """List all invoices"""
-        print(f"\n📋 Listing invoices (skip={skip}, limit={limit})")
+        print(f"\n Listing invoices (skip={skip}, limit={limit})")
         try:
             request = PB2.ListInvoicesRequest(skip=skip, limit=limit)
             response = self.stub.ListInvoices(request, timeout=5)
@@ -77,7 +77,7 @@ class InvoiceClient:
     
     def update_invoice(self, invoice_id: str, supplier: str, amount: float):
         """Update an invoice"""
-        print(f"\n✏️  Updating invoice: {invoice_id}")
+        print(f"\n Updating invoice: {invoice_id}")
         try:
             request = PB2.UpdateInvoiceRequest(
                 id=invoice_id,
@@ -94,7 +94,7 @@ class InvoiceClient:
     
     def delete_invoice(self, invoice_id: str):
         """Delete an invoice"""
-        print(f"\n🗑️  Deleting invoice: {invoice_id}")
+        print(f"\n Deleting invoice: {invoice_id}")
         try:
             request = PB2.DeleteInvoiceRequest(id=invoice_id)
             response = self.stub.DeleteInvoice(request, timeout=5)
@@ -106,7 +106,7 @@ class InvoiceClient:
     
     def initiate_payment(self, invoice_id: str, amount: float, payment_method: str = "transfer"):
         """Initiate a payment for an invoice"""
-        print(f"\n💳 Initiating payment for invoice: {invoice_id}")
+        print(f"\n Initiating payment for invoice: {invoice_id}")
         try:
             request = PB2.PaymentRequest(
                 invoice_id=invoice_id,
@@ -129,7 +129,7 @@ class InvoiceClient:
 def main():
     """Main test scenario"""
     print("=" * 60)
-    print("🚀 Invoice Service gRPC Client - Test Scenario")
+    print(" Invoice Service gRPC Client - Test Scenario")
     print("=" * 60)
     
     # Connect to gRPC server
@@ -137,9 +137,9 @@ def main():
     
     try:
         # Create invoices
-        inv1 = client.create_invoice("INV-001", "Acme Corp", 1250.00)
-        inv2 = client.create_invoice("INV-002", "TechCorp GmbH", 3500.50)
-        inv3 = client.create_invoice("INV-003", "DataSolutions Ltd", 890.00)
+        client.create_invoice("INV-001", "Acme Corp", 1250.00)
+        client.create_invoice("INV-002", "TechCorp GmbH", 3500.50)
+        client.create_invoice("INV-003", "DataSolutions Ltd", 890.00)
         
         # List invoices
         time.sleep(1)
@@ -155,10 +155,10 @@ def main():
         
         # Initiate payment
         time.sleep(1)
-        payment = client.initiate_payment("INV-001", 1250.00, "transfer")
+        client.initiate_payment("INV-001", 1250.00, "transfer")
         
         # Wait for payment to be processed
-        print("\n⏳ Waiting for payment processing...")
+        print("\n Waiting for payment processing...")
         time.sleep(3)
         
         # Check invoice status after payment
