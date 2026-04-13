@@ -16,7 +16,7 @@ Moderne, verteilte Architektur für Rechnungsverarbeitung und asynchrone Zahlung
 │                  (app/grpc_server.py)                       │
 │                                                             │                       
 │   • CreateInvoice / GetInvoice / UpdateInvoice              │   update invoice status
-│   • ListInvoices / DeleteInvoice /UpdateStatusInvoice       │<------------------------| 
+│   • ListInvoices / DeleteInvoice / UpdateInvoiceStatus      │<------------------------| 
 │   • InitiatePayment (→ RabbitMQ)                            │                         │
 └──────┬────────────────────────────────┬─────────────────────┘                         │
        │ SQL                            │ publish to payment_orders                     │
@@ -52,6 +52,7 @@ Moderne, verteilte Architektur für Rechnungsverarbeitung und asynchrone Zahlung
 | `GetInvoice` | id | Invoice | Einzelne Rechnung abrufen. |
 | `ListInvoices` | skip, limit | [Invoice], total | Alle Rechnungen mit Pagination. |
 | `UpdateInvoice` | id, supplier?, amount? | Invoice | Supplier/Amount aktualisieren (optional). |
+| `UpdateInvoiceStatus` | id, status | Invoice | Nur den Status einer Rechnung aktualisieren. |
 | `DeleteInvoice` | id | success | Rechnung löschen. |
 | `InitiatePayment` | invoice_id, amount, method | payment_id | Zahlung initiieren → Message in `payment_orders` Queue. |
 
