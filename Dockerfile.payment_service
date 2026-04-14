@@ -11,14 +11,25 @@ COPY requirements.txt .
 # Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy application code
-COPY app/ ./app/
+# Copy shared modules
+COPY config/ ./config/
+COPY utils/ ./utils/
 
-# Generate gRPC Python code from proto files
-RUN mkdir -p ./app/generated && touch ./app/generated/__init__.py
-RUN python -m grpc_tools.protoc -I./app/proto --python_out=./app/generated --grpc_python_out=./app/generated ./app/proto/invoice.proto
-RUN python -m grpc_tools.protoc -I./app/proto --python_out=./app/generated --grpc_python_out=./app/generated ./app/proto/payment.proto
-RUN sed -i 's/^import invoice_pb2 as/from . import invoice_pb2 as/' ./app/generated/invoice_pb2_grpc.py
+# Copy payment service code
+COPY payment_service/ ./payment_service/
+
+# Generate gRPC Python code from proto files (need invoice_pb2 for client calls)
+RUN mkdir -p ./payment_service/generated && touch ./payment_service/generated/__init__.py
+RUN mkdir -p ./grpc_service_proto/generated && touch ./grpc_service_proto/generated/__init__.py
+RUN python -m grpc_tools.protoc -I./payment_service/proto --python_out=./payment_service/generated --grpc_python_out=./payment_service/generated ./payment_service/proto/payment.proto
+
+# Copy gRPC service proto for generating invoice_pb2 (needed by payment service for gRPC calls)
+COPY grpc_service/proto/ ./grpc_service_proto/
+RUN python -m grpc_tools.protoc -I./grpc_service_proto --python_out=./payment_service/generated --grpc_python_out=./payment_service/generated ./grpc_service_proto/invoice.proto
+
+# Fix relative imports in generated files
+RUN sed -i 's/^import invoice_pb2 as/from . import invoice_pb2 as/' ./payment_service/generated/invoice_pb2_grpc.py
+RUN sed -i 's/^import payment_pb2 as/from . import payment_pb2 as/' ./payment_service/generated/payment_pb2_grpc.py
 
 # Run payment service
-CMD ["python", "-m", "app.payment_service"]
+CMD ["python", "-m", "payment_service"]
