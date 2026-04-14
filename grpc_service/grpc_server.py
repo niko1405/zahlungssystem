@@ -8,6 +8,8 @@ lazy logging patterns for better runtime performance.
 # pyright: reportAttributeAccessIssue=false
 
 import json
+import os
+import sys
 import uuid
 from concurrent import futures
 from datetime import datetime
@@ -17,9 +19,12 @@ import grpc
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
-from app.config.database import SessionLocal, engine
-from app.models import Base
-from app.utils import (
+# Add parent directory to path for imports
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from config.database import SessionLocal, engine, Base
+from grpc_service.models import Invoice
+from utils import (
     RabbitMQConnection,
     StructuredLogger,
     create_invoice,

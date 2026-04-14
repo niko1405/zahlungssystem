@@ -1,9 +1,9 @@
 """
 Main entry point for gRPC Server
-Run with: python -m app.grpc_server
+Run with: python -m grpc_service
 """
 
-from app.grpc_server import serve
+from grpc_service.grpc_server import serve
 
 if __name__ == '__main__':
     serve()

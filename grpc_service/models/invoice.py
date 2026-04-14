@@ -1,8 +1,14 @@
 """Invoice model for the invoice management system."""
 
+import os
+import sys
 from sqlalchemy import Column, String, Float, DateTime
 from sqlalchemy.sql import func
-from app.config.database import Base
+
+# Add parent directory to path for imports
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+
+from config.database import Base
 
 class Invoice(Base):
     """Database model for an invoice."""
