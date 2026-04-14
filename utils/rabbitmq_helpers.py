@@ -5,12 +5,16 @@ connection setup, queue management, and message publishing.
 """
 
 import os
+import sys
 import time
 from typing import Callable, Optional
 import pika
 from pika.adapters import blocking_connection
 
-from app.utils.logging_config import StructuredLogger
+# Add root directory to path for imports
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from utils.logging_config import StructuredLogger
 
 
 logger = StructuredLogger.for_module(__name__)

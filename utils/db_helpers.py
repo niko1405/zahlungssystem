@@ -4,17 +4,25 @@ This module provides helper functions for database operations used by
 the gRPC server and payment service.
 """
 
-from typing import Optional, List
+import os
+import sys
+from typing import Optional, List, TYPE_CHECKING
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
-from app.models.invoice import Invoice
-from app.utils.logging_config import StructuredLogger
+
+# Add root directory to path for imports
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from utils.logging_config import StructuredLogger
+
+if TYPE_CHECKING:
+    from grpc_service.models.invoice import Invoice
 
 
 logger = StructuredLogger.for_module(__name__)
 
 
-def get_invoice_or_none(db: Session, invoice_id: str) -> Optional[Invoice]:
+def get_invoice_or_none(db: Session, invoice_id: str) -> Optional["Invoice"]:
     """Retrieve an invoice by ID.
     
     Args:
@@ -27,6 +35,8 @@ def get_invoice_or_none(db: Session, invoice_id: str) -> Optional[Invoice]:
     Raises:
         SQLAlchemyError: If the database query fails.
     """
+    from grpc_service.models.invoice import Invoice
+    
     try:
         invoice = db.query(Invoice).filter(Invoice.id == invoice_id).first()
 
@@ -46,7 +56,7 @@ def create_invoice(
     invoice_id: str,
     supplier: str,
     amount: float
-) -> Optional[Invoice]:
+) -> Optional["Invoice"]:
     """Create a new invoice.
     
     Validates that the invoice doesn't already exist before creating.
@@ -63,6 +73,8 @@ def create_invoice(
     Raises:
         SQLAlchemyError: If the create transaction fails.
     """
+    from grpc_service.models.invoice import Invoice
+    
     try:
         existing = db.query(Invoice).filter(Invoice.id == invoice_id).first()
 
@@ -101,7 +113,7 @@ def update_invoice(
     invoice_id: str,
     supplier: Optional[str] = None,
     amount: Optional[float] = None
-) -> Optional[Invoice]:
+) -> Optional["Invoice"]:
     """Update an invoice.
     
     Args:
@@ -148,7 +160,7 @@ def update_invoice_status(
     db: Session,
     invoice_id: str,
     new_status: str
-) -> Optional[Invoice]:
+) -> Optional["Invoice"]:
     """Update only the status of an invoice.
     
     Args:
@@ -229,7 +241,7 @@ def list_invoices(
     db: Session,
     skip: int = 0,
     limit: int = 100
-) -> tuple[List[Invoice], int]:
+) -> tuple[List["Invoice"], int]:
     """List invoices with pagination.
     
     Args:
@@ -243,6 +255,8 @@ def list_invoices(
     Raises:
         SQLAlchemyError: If list or count queries fail.
     """
+    from grpc_service.models.invoice import Invoice
+    
     try:
         invoices = db.query(Invoice).offset(skip).limit(limit).all()
         total = db.query(Invoice).count()
