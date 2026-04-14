@@ -12,16 +12,19 @@ This service:
 
 import json
 import os
+import sys
 import time
 from datetime import datetime
 from typing import Any, Optional, cast
 
 import grpc
 import pika
-from app.generated import invoice_pb2, invoice_pb2_grpc
 
-# Import utilities
-from app.utils import (
+# Add parent directory to path for imports
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from payment_service.generated import invoice_pb2, invoice_pb2_grpc
+from utils import (
     StructuredLogger,
     RabbitMQConnection,
 )
