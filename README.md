@@ -13,7 +13,7 @@ Moderne, verteilte Architektur für Rechnungsverarbeitung und asynchrone Zahlung
                          ▼  initiate payment
 ┌─────────────────────────────────────────────────────────────┐
 │                  gRPC SERVER - 50051                        │
-│                  (app/grpc_server.py)                       │
+│              (grpc_service/grpc_server.py)                  │
 │                                                             │                       
 │   • CreateInvoice / GetInvoice / UpdateInvoice              │   update invoice status
 │   • ListInvoices / DeleteInvoice / UpdateInvoiceStatus      │<------------------------| 
@@ -23,8 +23,8 @@ Moderne, verteilte Architektur für Rechnungsverarbeitung und asynchrone Zahlung
        ▼                                ▼                                               │
 ┌────────────────────┐        ┌────────────────────────────────────┐      ┌────────────────────────────┐
 │ PostgreSQL - 5050  │        │        RabbitMQ - 15672            │      │  PAYMENT SERVICE - 50051   │
-│                    │        │                                    │      │ (app/payment_service.py)   │
-|   (invoice_db)     │        │                                    │      │                            │   
+│                    │        │                                    │      │ (payment_service/          │
+│                    │        │                                    │      │  payment_service.py)       │
 │                    │        │  ┌──────────────────────────────┐  │cons. │  1. Parse Message          │
 └────────────────────┘        │  │     payment_orders queue     │--│----->│  2. Validate Invoice       │
                               │  └──────────────────────────────┘  │      │  3. Process Payment        │
@@ -40,7 +40,7 @@ Moderne, verteilte Architektur für Rechnungsverarbeitung und asynchrone Zahlung
 
 ## Die 3 Hauptkomponenten
 
-### 1. gRPC Server (`app/grpc_server.py`)
+### 1. gRPC Server (`grpc_service/grpc_server.py`)
 
 **Zweck:** Provide gRPC endpoints für CRUD-Operationen auf Rechnungen.
 
@@ -72,7 +72,7 @@ Protobuf Message → Client
 
 ---
 
-### 2. Payment Service (`app/payment_service.py`)
+### 2. Payment Service (`payment_service/payment_service.py`)
 
 **Zweck:** Asynchrone Verarbeitung von Zahlungsaufträgen via RabbitMQ.
 
@@ -104,7 +104,7 @@ Message ACK → Bestätigung an RabbitMQ
 
 ---
 
-### 3. Hilfsfunktionen (`app/utils/`)
+### 3. Hilfsfunktionen (`utils/`)
 
 **Lazy Logging** (`logging_config.py`):
 
@@ -137,9 +137,9 @@ logger.log_rabbitmq_event("MESSAGE_RECEIVED", status="IN_PROGRESS", queue="payme
 
 Die fachliche Rechnung wird im Projekt an drei Stellen abgebildet:
 
-- als SQLAlchemy-Model in `app/models/invoice.py`
-- als gRPC-Message `Invoice` in `app/proto/invoice.proto`
-- als Python-Objekt aus den generierten Stubs in `app/generated/invoice_pb2.py`
+- als SQLAlchemy-Model in `grpc_service/models/invoice.py`
+- als gRPC-Message `Invoice` in `grpc_service/proto/invoice.proto`
+- als Python-Objekt aus den generierten Stubs in `grpc_service/generated/invoice_pb2.py`
 
 ### Fachliche Felder
 
