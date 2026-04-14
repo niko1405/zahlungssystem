@@ -11,14 +11,17 @@ COPY requirements.txt .
 # Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy application code
-COPY app/ ./app/
+# Copy shared modules
+COPY config/ ./config/
+COPY utils/ ./utils/
+
+# Copy gRPC service code
+COPY grpc_service/ ./grpc_service/
 
 # Generate gRPC Python code from proto files
-RUN mkdir -p ./app/generated && touch ./app/generated/__init__.py
-RUN python -m grpc_tools.protoc -I./app/proto --python_out=./app/generated --grpc_python_out=./app/generated ./app/proto/invoice.proto
-RUN python -m grpc_tools.protoc -I./app/proto --python_out=./app/generated --grpc_python_out=./app/generated ./app/proto/payment.proto
-RUN sed -i 's/^import invoice_pb2 as/from . import invoice_pb2 as/' ./app/generated/invoice_pb2_grpc.py
+RUN mkdir -p ./grpc_service/generated && touch ./grpc_service/generated/__init__.py
+RUN python -m grpc_tools.protoc -I./grpc_service/proto --python_out=./grpc_service/generated --grpc_python_out=./grpc_service/generated ./grpc_service/proto/invoice.proto
+RUN sed -i 's/^import invoice_pb2 as/from . import invoice_pb2 as/' ./grpc_service/generated/invoice_pb2_grpc.py
 
 # Run gRPC server
-CMD ["python", "-m", "app.grpc_server"]
+CMD ["python", "-m", "grpc_service"]
