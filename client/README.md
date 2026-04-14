@@ -34,18 +34,6 @@ Der `test_client.py` demonstriert einen kompletten Workflow:
 7. Prüft die aktualisierte Rechnung (sollte Status "paid" haben)
 8. Löscht eine Rechnung
 
-## Als separates Repository
-
-Dieser Client kann als eigenes Repository organisiert werden:
-
-```
-invoice-client/
-├── test_client.py
-├── requirements.txt
-├── Dockerfile
-└── README.md
-```
-
 Die einzige Abhängigkeit ist die gRPC-Stub-Datei (`app/generated/invoice_pb2.py`), 
 die entweder:
 - Aus dem Hauptprojekt kopiert wird, oder
