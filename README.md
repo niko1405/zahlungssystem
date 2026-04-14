@@ -38,11 +38,11 @@ Moderne, verteilte Architektur für Rechnungsverarbeitung und asynchrone Zahlung
 
 ---
 
-## Die 3 Hauptkomponenten
+## Hauptkomponenten
 
-### 1. gRPC Server (`grpc_service/grpc_server.py`)
+### gRPC Server (`grpc_service/grpc_server.py`)
 
-**Zweck:** Provide gRPC endpoints für CRUD-Operationen auf Rechnungen.
+**Zweck:** gRPC Endpunkte für CRUD-Operationen auf Rechnungen.
 
 **Methoden:**
 
@@ -69,67 +69,6 @@ StructuredLogger tracked: "DB CREATE invoice [SUCCESS] - invoice_id=INV-001"
        ↓
 Protobuf Message → Client
 ```
-
----
-
-### 2. Payment Service (`payment_service/payment_service.py`)
-
-**Zweck:** Asynchrone Verarbeitung von Zahlungsaufträgen via RabbitMQ.
-
-**Workflow:**
-
-```text
-RabbitMQ payment_orders Queue
-       ↓
-[process_payment_order] callback greift Message
-       ↓
-[_process_payment_message]     → JSON parsen
-       ↓
-[_validate_invoice]            → DB: Existiert die Rechnung?
-       ↓
-[_simulate_payment_processing] → Zahlung simulieren (1s delay)
-       ↓
-[_update_database]             → db_helpers.update_invoice_status(..., "paid")
-       ↓
-[_send_payment_result]         → Result in payment_results Queue publishen
-       ↓
-Message ACK → Bestätigung an RabbitMQ
-```
-
-**Error Handling:**
-
-- JSON Parse Error → Message NACK (nicht requeued)
-- Invoice not found → Result "failed" senden, Message ACK
-- DB Update Error → Message NACK mit `requeue=True` (Retry)
-
----
-
-### 3. Hilfsfunktionen (`utils/`)
-
-**Lazy Logging** (`logging_config.py`):
-
-```python
-logger = StructuredLogger.for_module(__name__)
-logger.log_grpc_call("CreateInvoice", status="SUCCESS", invoice_id="INV-001")
-logger.log_db_operation("UPDATE", "invoice", status="SUCCESS", old_status="pending", new_status="paid")
-logger.log_rabbitmq_event("MESSAGE_RECEIVED", status="IN_PROGRESS", queue="payment_orders")
-```
-
-**Database Helpers** (`db_helpers.py`):
-
-- `create_invoice()` — Mit Existierungsprüfung
-- `get_invoice_or_none()` — Safe Get
-- `update_invoice_status()` — Status ändern
-- `list_invoices()` — Mit Pagination
-- `delete_invoice()` — Mit Validierung
-
-**RabbitMQ Wrapper** (`rabbitmq_helpers.py`):
-
-- `connect()` — Connection mit Retries
-- `declare_queue()` — Queue sicherstellen
-- `publish_message()` — Message publishen
-- `setup_consumer()` — Consumer registrieren
-- `start_consuming()` — Blocking Consumer Loop
 
 ---
 
@@ -178,6 +117,67 @@ Payment Service aktualisiert nur den Status über gRPC
     "status": "paid"
 }
 ```
+
+---
+
+### Payment Service (`payment_service/payment_service.py`)
+
+**Zweck:** Asynchrone Verarbeitung von Zahlungsaufträgen via RabbitMQ.
+
+**Workflow:**
+
+```text
+RabbitMQ payment_orders Queue
+       ↓
+[process_payment_order] callback greift Message
+       ↓
+[_process_payment_message]     → JSON parsen
+       ↓
+[_validate_invoice]            → DB: Existiert die Rechnung?
+       ↓
+[_simulate_payment_processing] → Zahlung simulieren (1s delay)
+       ↓
+[_update_database]             → db_helpers.update_invoice_status(..., "paid")
+       ↓
+[_send_payment_result]         → Result in payment_results Queue publishen
+       ↓
+Message ACK → Bestätigung an RabbitMQ
+```
+
+**Error Handling:**
+
+- JSON Parse Error → Message NACK (nicht requeued)
+- Invoice not found → Result "failed" senden, Message ACK
+- DB Update Error → Message NACK mit `requeue=True` (Retry)
+
+---
+
+### Hilfsfunktionen (`utils/`)
+
+**Lazy Logging** (`logging_config.py`):
+
+```python
+logger = StructuredLogger.for_module(__name__)
+logger.log_grpc_call("CreateInvoice", status="SUCCESS", invoice_id="INV-001")
+logger.log_db_operation("UPDATE", "invoice", status="SUCCESS", old_status="pending", new_status="paid")
+logger.log_rabbitmq_event("MESSAGE_RECEIVED", status="IN_PROGRESS", queue="payment_orders")
+```
+
+**Database Helpers** (`db_helpers.py`):
+
+- `create_invoice()` — Mit Existierungsprüfung
+- `get_invoice_or_none()` — Safe Get
+- `update_invoice_status()` — Status ändern
+- `list_invoices()` — Mit Pagination
+- `delete_invoice()` — Mit Validierung
+
+**RabbitMQ Wrapper** (`rabbitmq_helpers.py`):
+
+- `connect()` — Connection mit Retries
+- `declare_queue()` — Queue sicherstellen
+- `publish_message()` — Message publishen
+- `setup_consumer()` — Consumer registrieren
+- `start_consuming()` — Blocking Consumer Loop
 
 ---
 
