@@ -43,7 +43,7 @@ services:
     environment:
       DATABASE_URL: postgresql://invoice_user:invoice_password@postgres:5432/invoice_db
       RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/%2F?heartbeat=300&blocked_connection_timeout=300
-      PYTHONPATH: /app/app
+      PYTHONPATH: /app
     ports:
       - "50051:50051"
     depends_on:
@@ -63,7 +63,7 @@ services:
       DATABASE_URL: postgresql://invoice_user:invoice_password@postgres:5432/invoice_db
       RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/%2F?heartbeat=300&blocked_connection_timeout=300
       GRPC_SERVER_TARGET: grpc-server:50051
-      PYTHONPATH: /app/app
+      PYTHONPATH: /app
     depends_on:
       postgres:
         condition: service_healthy
