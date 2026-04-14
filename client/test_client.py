@@ -10,11 +10,12 @@ from typing import Any, cast
 import grpc
 
 # Make sure generated stubs are importable when run as script or in Docker.
-sys.path.insert(0, "./app")
-sys.path.insert(0, "/app/app")
+# Add parent directory to path for new structure
+sys.path.insert(0, "..")
+sys.path.insert(0, "/app")
 
-from generated import invoice_pb2
-from generated import invoice_pb2_grpc
+from grpc_service.generated import invoice_pb2
+from grpc_service.generated import invoice_pb2_grpc
 
 PB2 = cast(Any, invoice_pb2)
 
