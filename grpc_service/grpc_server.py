@@ -20,6 +20,7 @@ from sqlalchemy.orm import Session
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from config.database import SessionLocal, engine, Base
+from grpc_service.models import Invoice
 from utils import (
     StructuredLogger,
     create_invoice,
@@ -35,7 +36,8 @@ from .generated import invoice_pb2, invoice_pb2_grpc
 logger = StructuredLogger.for_module(__name__)
 PB2: Any = invoice_pb2
 
-Base.metadata.create_all(bind=engine)
+# Ensure the invoice table exists before serving requests.
+Base.metadata.create_all(bind=engine, tables=[Invoice.__table__])
 
 
 class InvoiceServiceServicer(invoice_pb2_grpc.InvoiceServiceServicer):

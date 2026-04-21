@@ -253,9 +253,8 @@ def main() -> int:
         print("\n" + "=" * 60)
         failed_steps = total_steps - passed_steps
         print(f"Steps passed: {passed_steps}/{total_steps}")
-        print(f"Steps failed: {failed_steps}/{total_steps}")
         if had_failures:
-            print("❌ Test failed: one or more test steps failed")
+            print(f"❌ Test failed: {failed_steps} test steps failed")
             print("=" * 60)
             return 1
         else:
