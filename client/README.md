@@ -19,7 +19,7 @@ python test_client.py  # (conn.init nimmt host='grpc-server' wenn in Docker)
 - ✅ Rechnungen auflisten
 - ✅ Rechnungen aktualisieren
 - ✅ Rechnungen löschen
-- ✅ Zahlungen einleiten
+- ✅ Zahlungsauftrag direkt in RabbitMQ erstellen
 
 ## Was der Client macht
 
@@ -29,12 +29,13 @@ Der `test_client.py` demonstriert einen kompletten Workflow:
 2. Listet alle Rechnungen auf
 3. Ruft eine einzelne Rechnung ab
 4. Aktualisiert eine Rechnung
-5. Initiiert eine Zahlung
+5. Erstellt einen Zahlungsauftrag direkt in `payment_orders` (RabbitMQ)
 6. Wartet auf die Zahlungsverarbeitung (Payment Service)
 7. Prüft die aktualisierte Rechnung (sollte Status "paid" haben)
 8. Löscht eine Rechnung
 
-Die einzige Abhängigkeit ist die gRPC-Stub-Datei (`app/generated/invoice_pb2.py`), 
+Die einzige Abhängigkeit ist die gRPC-Stub-Datei (`app/generated/invoice_pb2.py`),
 die entweder:
+
 - Aus dem Hauptprojekt kopiert wird, oder
 - Durch Installation des gRPC-Pakets generiert wird
