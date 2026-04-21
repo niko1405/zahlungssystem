@@ -171,7 +171,7 @@ class InvoiceClient:
         self.channel.close()
 
 
-def main():
+def main() -> int:
     """Main test scenario"""
     print("=" * 60)
     print(" Invoice Service gRPC Client - Test Scenario")
@@ -256,14 +256,18 @@ def main():
         print(f"Steps failed: {failed_steps}/{total_steps}")
         if had_failures:
             print("❌ Test failed: one or more test steps failed")
+            print("=" * 60)
+            return 1
         else:
             print("✅ Test completed successfully!")
-        print("=" * 60)
+            print("=" * 60)
+            return 0
     except (grpc.RpcError, RuntimeError, ValueError, TypeError, pika.exceptions.AMQPError) as e:
         print(f"\n❌ Test failed: {e}")
+        return 1
     finally:
         client.close()
 
 
 if __name__ == '__main__':
-    main()
+    sys.exit(main())
