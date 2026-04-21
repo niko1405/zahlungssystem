@@ -225,7 +225,6 @@ def main():
         print("\n" + "=" * 60)
         print("✅ Test completed successfully!")
         print("=" * 60)
-        
     except (grpc.RpcError, RuntimeError, ValueError, TypeError, pika.exceptions.AMQPError) as e:
         print(f"\n❌ Test failed: {e}")
     finally:

@@ -10,17 +10,16 @@ Moderne, verteilte Architektur für Rechnungsverarbeitung und asynchrone Zahlung
 │                  (client/test_client.py)                    │
 └────────────────────────┬────────────────────────────────────┘
                          │  save invoices
-                         ▼  initiate payment
+                         ▼  publish payment order
 ┌─────────────────────────────────────────────────────────────┐
 │                  gRPC SERVER - 50051                        │
 │              (grpc_service/grpc_server.py)                  │
 │                                                             │                       
 │   • CreateInvoice / GetInvoice / UpdateInvoice              │   update invoice status
 │   • ListInvoices / DeleteInvoice / UpdateInvoiceStatus      │<------------------------| 
-│   • InitiatePayment (→ RabbitMQ)                            │                         │
-└──────┬────────────────────────────────┬─────────────────────┘                         │
-       │ SQL                            │ publish to payment_orders                     │
-       ▼                                ▼                                               │
+└──────┬───────────────────────────────────────────────────────┘                         │
+       │ SQL                                                                            │
+       ▼                                                                                │
 ┌────────────────────┐        ┌────────────────────────────────────┐      ┌────────────────────────────┐
 │ PostgreSQL - 5050  │        │        RabbitMQ - 15672            │      │  PAYMENT SERVICE - 50051   │
 │                    │        │                                    │      │ (payment_service/          │
@@ -54,7 +53,6 @@ Moderne, verteilte Architektur für Rechnungsverarbeitung und asynchrone Zahlung
 | `UpdateInvoice` | id, supplier?, amount? | Invoice | Supplier/Amount aktualisieren (optional). |
 | `UpdateInvoiceStatus` | id, status | Invoice | Nur den Status einer Rechnung aktualisieren. |
 | `DeleteInvoice` | id | success | Rechnung löschen. |
-| `InitiatePayment` | invoice_id, amount, method | payment_id | Zahlung initiieren → Message in `payment_orders` Queue. |
 
 **Workflow beispiel:**
 

@@ -64,11 +64,6 @@ class InvoiceServiceStub(object):
                 request_serializer=invoice__pb2.DeleteInvoiceRequest.SerializeToString,
                 response_deserializer=invoice__pb2.DeleteInvoiceResponse.FromString,
                 _registered_method=True)
-        self.InitiatePayment = channel.unary_unary(
-                '/invoice.InvoiceService/InitiatePayment',
-                request_serializer=invoice__pb2.PaymentRequest.SerializeToString,
-                response_deserializer=invoice__pb2.PaymentResponse.FromString,
-                _registered_method=True)
 
 
 class InvoiceServiceServicer(object):
@@ -110,12 +105,6 @@ class InvoiceServiceServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
-    def InitiatePayment(self, request, context):
-        """Missing associated documentation comment in .proto file."""
-        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-        context.set_details('Method not implemented!')
-        raise NotImplementedError('Method not implemented!')
-
 
 def add_InvoiceServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -148,11 +137,6 @@ def add_InvoiceServiceServicer_to_server(servicer, server):
                     servicer.DeleteInvoice,
                     request_deserializer=invoice__pb2.DeleteInvoiceRequest.FromString,
                     response_serializer=invoice__pb2.DeleteInvoiceResponse.SerializeToString,
-            ),
-            'InitiatePayment': grpc.unary_unary_rpc_method_handler(
-                    servicer.InitiatePayment,
-                    request_deserializer=invoice__pb2.PaymentRequest.FromString,
-                    response_serializer=invoice__pb2.PaymentResponse.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -317,33 +301,6 @@ class InvoiceService(object):
             '/invoice.InvoiceService/DeleteInvoice',
             invoice__pb2.DeleteInvoiceRequest.SerializeToString,
             invoice__pb2.DeleteInvoiceResponse.FromString,
-            options,
-            channel_credentials,
-            insecure,
-            call_credentials,
-            compression,
-            wait_for_ready,
-            timeout,
-            metadata,
-            _registered_method=True)
-
-    @staticmethod
-    def InitiatePayment(request,
-            target,
-            options=(),
-            channel_credentials=None,
-            call_credentials=None,
-            insecure=False,
-            compression=None,
-            wait_for_ready=None,
-            timeout=None,
-            metadata=None):
-        return grpc.experimental.unary_unary(
-            request,
-            target,
-            '/invoice.InvoiceService/InitiatePayment',
-            invoice__pb2.PaymentRequest.SerializeToString,
-            invoice__pb2.PaymentResponse.FromString,
             options,
             channel_credentials,
             insecure,

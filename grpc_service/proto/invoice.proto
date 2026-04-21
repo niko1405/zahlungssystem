@@ -9,7 +9,6 @@ service InvoiceService {
   rpc UpdateInvoice (UpdateInvoiceRequest) returns (InvoiceResponse) {}
   rpc UpdateInvoiceStatus (UpdateInvoiceStatusRequest) returns (InvoiceResponse) {}
   rpc DeleteInvoice (DeleteInvoiceRequest) returns (DeleteInvoiceResponse) {}
-  rpc InitiatePayment (PaymentRequest) returns (PaymentResponse) {}
 }
 
 message Invoice {
@@ -65,16 +64,4 @@ message InvoiceResponse {
   bool success = 1;
   string message = 2;
   Invoice invoice = 3;
-}
-
-message PaymentRequest {
-  string invoice_id = 1;
-  double amount = 2;
-  string payment_method = 3;  // "transfer", "card", etc.
-}
-
-message PaymentResponse {
-  bool success = 1;
-  string message = 2;
-  string payment_id = 3;
 }

@@ -1,18 +1,15 @@
 """gRPC Server for Invoice Management Service.
 
-This module implements CRUD operations for invoices and payment initiation.
-It uses helper modules for database and RabbitMQ interactions and follows
+This module implements CRUD operations for invoices.
+It uses helper modules for database interactions and follows
 lazy logging patterns for better runtime performance.
 """
 
 # pyright: reportAttributeAccessIssue=false
 
-import json
 import os
 import sys
-import uuid
 from concurrent import futures
-from datetime import datetime
 from typing import Any
 
 import grpc
@@ -23,9 +20,7 @@ from sqlalchemy.orm import Session
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from config.database import SessionLocal, engine, Base
-from grpc_service.models import Invoice
 from utils import (
-    RabbitMQConnection,
     StructuredLogger,
     create_invoice,
     delete_invoice,
@@ -49,24 +44,9 @@ class InvoiceServiceServicer(invoice_pb2_grpc.InvoiceServiceServicer):
     def __init__(self):
         """Initialize service dependencies.
 
-        Creates one database session and one RabbitMQ connection manager for the
-        servicer lifecycle.
+        Creates one database session for the servicer lifecycle.
         """
         self.db: Session = SessionLocal()
-        self.rmq = RabbitMQConnection()
-        self._setup_rabbitmq()
-
-    def _setup_rabbitmq(self) -> None:
-        """Initialize RabbitMQ connection and required queues.
-
-        Raises:
-            RuntimeError: If channel operations are attempted without a connection.
-            pika.exceptions.AMQPError: If RabbitMQ connection retries are exhausted.
-        """
-        self.rmq.connect(max_retries=5, retry_delay=2)
-        self.rmq.declare_queue("payment_orders", durable=True)
-        self.rmq.declare_queue("payment_results", durable=True)
-        logger.log_rabbitmq_event("CONNECTED", status="SUCCESS")
 
     @staticmethod
     def _to_proto(db_invoice) -> Any:
@@ -284,60 +264,6 @@ class InvoiceServiceServicer(invoice_pb2_grpc.InvoiceServiceServicer):
         except (SQLAlchemyError, ValueError, TypeError) as exc:
             logger.log_error("UpdateInvoiceStatus failed", exc_info=exc, invoice_id=request.id)
             context.abort(grpc.StatusCode.INTERNAL, "Error updating invoice status")
-
-    def InitiatePayment(self, request, context):
-        """Initiate asynchronous payment processing for an invoice.
-
-        Args:
-            request: PaymentRequest protobuf message.
-            context: gRPC ServicerContext.
-
-        Returns:
-            Protobuf response containing payment order details.
-
-        Raises:
-            grpc.RpcError: Forwarded when context.abort is called.
-            SQLAlchemyError: For invoice lookup failures.
-            RuntimeError: If RabbitMQ is not connected.
-            ValueError: For invalid JSON serialization values.
-            TypeError: For non-serializable payload values.
-        """
-        logger.log_grpc_call(
-            "InitiatePayment",
-            status="IN_PROGRESS",
-            invoice_id=request.invoice_id,
-            amount=request.amount,
-        )
-        try:
-            invoice = get_invoice_or_none(self.db, request.invoice_id)
-            if not invoice:
-                context.abort(grpc.StatusCode.NOT_FOUND, "Invoice not found")
-
-            payment_id = str(uuid.uuid4())
-            payload = {
-                "id": payment_id,
-                "invoice_id": request.invoice_id,
-                "amount": request.amount,
-                "payment_method": request.payment_method,
-                "timestamp": int(datetime.now().timestamp()),
-                "status": "pending",
-            }
-            self.rmq.publish_message("payment_orders", json.dumps(payload), persistent=True)
-
-            logger.log_grpc_call("InitiatePayment", status="SUCCESS", payment_id=payment_id)
-            return getattr(PB2, "PaymentResponse")(  # pyright: ignore[reportAttributeAccessIssue]
-                success=True,
-                message="Payment order created",
-                payment_id=payment_id,
-            )
-        except (SQLAlchemyError, RuntimeError, ValueError, TypeError) as exc:
-            logger.log_error(
-                "InitiatePayment failed",
-                exc_info=exc,
-                invoice_id=request.invoice_id,
-            )
-            context.abort(grpc.StatusCode.INTERNAL, "Error initiating payment")
-
 
 def serve() -> None:
     """Start and run the gRPC server.
