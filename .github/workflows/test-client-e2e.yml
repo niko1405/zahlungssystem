@@ -27,6 +27,9 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
+      - name: Regenerate gRPC stubs for CI environment
+        run: bash ./generate_grpc.sh
+
       - name: Start integration stack
         run: docker compose up -d --build postgres rabbitmq grpc-server payment-service
 
