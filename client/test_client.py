@@ -179,28 +179,49 @@ def main():
     
     # Connect to gRPC server
     client = InvoiceClient(host='localhost', port=50051)
+    had_failures = False
+    total_steps = 0
+    passed_steps = 0
+
+    def check_step(step_name: str, condition: bool) -> None:
+        """Track failed test steps and print a concise marker."""
+        nonlocal had_failures, total_steps, passed_steps
+        total_steps += 1
+        if condition:
+            passed_steps += 1
+            print(f"   [OK] {step_name}")
+        else:
+            had_failures = True
+            print(f"   [FAILED] {step_name}")
     
     try:
         # Create invoices
-        client.create_invoice("INV-001", "Acme Corp", 1250.00)
-        client.create_invoice("INV-002", "TechCorp GmbH", 3500.50)
-        client.create_invoice("INV-003", "DataSolutions Ltd", 890.00)
+        inv_1 = client.create_invoice("INV-001", "Acme Corp", 1250.00)
+        inv_2 = client.create_invoice("INV-002", "TechCorp GmbH", 3500.50)
+        inv_3 = client.create_invoice("INV-003", "DataSolutions Ltd", 890.00)
+        check_step("Create INV-001", inv_1 is not None)
+        check_step("Create INV-002", inv_2 is not None)
+        check_step("Create INV-003", inv_3 is not None)
         
         # List invoices
         time.sleep(1)
-        client.list_invoices()
+        invoices = client.list_invoices()
+        check_step("List invoices (initial)", len(invoices) > 0)
         
         # Get specific invoice
         time.sleep(1)
-        client.get_invoice("INV-001")
+        invoice = client.get_invoice("INV-001")
+        check_step("Get INV-001", invoice is not None)
         
         # Update invoice
         time.sleep(1)
-        client.update_invoice("INV-002", "TechCorp GmbH", 3600.00)
+        updated_invoice = client.update_invoice("INV-002", "TechCorp GmbH", 3600.00)
+        check_step("Update INV-002", updated_invoice is not None)
         
         # Initiate payment
         time.sleep(1)
-        client.initiate_payment("INV-001", 1250.00, "transfer")
+        payment_response = client.initiate_payment("INV-001", 1250.00, "transfer")
+        check_step("Publish payment order for INV-001", payment_response is not None)
         
         # Wait for payment to be processed
         print("\n Waiting for payment processing...")
@@ -208,22 +229,35 @@ def main():
         
         # Check invoice status after payment
         time.sleep(1)
-        client.get_invoice("INV-001")
+        paid_invoice = client.get_invoice("INV-001")
+        check_step(
+            "Invoice INV-001 status is paid",
+            paid_invoice is not None and getattr(paid_invoice, "status", "") == "paid"
+        )
         
         # List all invoices again
         time.sleep(1)
-        client.list_invoices()
+        invoices_after_payment = client.list_invoices()
+        check_step("List invoices (after payment)", len(invoices_after_payment) > 0)
         
         # Delete an invoice
         time.sleep(1)
-        client.delete_invoice("INV-003")
+        deleted = client.delete_invoice("INV-003")
+        check_step("Delete INV-003", deleted)
         
         # Final list
         time.sleep(1)
-        client.list_invoices()
+        final_invoices = client.list_invoices()
+        check_step("List invoices (final)", len(final_invoices) > 0)
         
         print("\n" + "=" * 60)
-        print("✅ Test completed successfully!")
+        failed_steps = total_steps - passed_steps
+        print(f"Steps passed: {passed_steps}/{total_steps}")
+        print(f"Steps failed: {failed_steps}/{total_steps}")
+        if had_failures:
+            print("❌ Test failed: one or more test steps failed")
+        else:
+            print("✅ Test completed successfully!")
         print("=" * 60)
     except (grpc.RpcError, RuntimeError, ValueError, TypeError, pika.exceptions.AMQPError) as e:
         print(f"\n❌ Test failed: {e}")
