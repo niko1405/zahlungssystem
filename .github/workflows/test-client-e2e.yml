@@ -5,7 +5,31 @@ on:
     branches:
       - main
       - master
+    paths:
+      - '.github/workflows/test-client-e2e.yml'
+      - 'client/**'
+      - 'config/**'
+      - 'grpc_service/**'
+      - 'payment_service/**'
+      - 'utils/**'
+      - 'docker-compose.yml'
+      - 'Dockerfile.*'
+      - 'generate_grpc.sh'
+      - 'requirements.txt'
+      - 'pyproject.toml'
   pull_request:
+    paths:
+      - '.github/workflows/test-client-e2e.yml'
+      - 'client/**'
+      - 'config/**'
+      - 'grpc_service/**'
+      - 'payment_service/**'
+      - 'utils/**'
+      - 'docker-compose.yml'
+      - 'Dockerfile.*'
+      - 'generate_grpc.sh'
+      - 'requirements.txt'
+      - 'pyproject.toml'
   workflow_dispatch:
 
 jobs:
