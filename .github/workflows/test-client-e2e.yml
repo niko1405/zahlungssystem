@@ -59,6 +59,7 @@ jobs:
       - name: Run test client (with startup retry)
         env:
           RABBITMQ_URL: amqp://guest:guest@localhost:5672/%2F?heartbeat=300&blocked_connection_timeout=300
+          PYTHONPATH: ${{ github.workspace }}
         run: |
           set -e
           for attempt in 1 2 3; do

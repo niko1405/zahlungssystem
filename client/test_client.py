@@ -15,14 +15,22 @@ from datetime import datetime
 import grpc
 import pika
 
-# Make sure generated stubs are importable when run as script or in Docker.
-# Add parent directory to path for new structure
-sys.path.insert(0, "..")
-sys.path.insert(0, "/app")
+try:
+    from grpc_service.generated import invoice_pb2
+    from grpc_service.generated import invoice_pb2_grpc
+    from utils import RabbitMQConnection
+except ModuleNotFoundError:
+    # Fallback for direct script execution from non-repo working directories.
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    project_root = os.path.abspath(os.path.join(script_dir, ".."))
+    if project_root not in sys.path:
+        sys.path.insert(0, project_root)
+    if "/app" not in sys.path:
+        sys.path.insert(0, "/app")
 
-from grpc_service.generated import invoice_pb2
-from grpc_service.generated import invoice_pb2_grpc
-from utils import RabbitMQConnection
+    from grpc_service.generated import invoice_pb2
+    from grpc_service.generated import invoice_pb2_grpc
+    from utils import RabbitMQConnection
 
 PB2 = cast(Any, invoice_pb2)
 
