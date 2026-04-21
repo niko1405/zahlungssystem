@@ -8,7 +8,8 @@ Moderne, verteilte Architektur für Rechnungsverarbeitung und asynchrone Zahlung
 flowchart LR
        C[Test Client\nclient/test_client.py]
        G[gRPC Server:50051\ngrpc_service/grpc_server.py]
-       DB[(PostgreSQL:5050)]
+       DB[(PostgreSQL:5432\nDB: invoice_db)]
+       A[pgAdmin:5050]
        P[Payment Service\npayment_service/payment_service.py]
 
        subgraph R[RabbitMQ:15672]
@@ -18,6 +19,7 @@ flowchart LR
 
        C -->|Create/Get/List/Update/Delete Invoice| G
        G -->|SQL| DB
+       A -->|Connects to| DB
 
        C -->|Publish payment order| QO
        QO -->|Consume| P
