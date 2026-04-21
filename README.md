@@ -4,35 +4,25 @@ Moderne, verteilte Architektur für Rechnungsverarbeitung und asynchrone Zahlung
 
 ## Architektur-Überblick
 
-```text
-┌─────────────────────────────────────────────────────────────┐
-│                      TEST CLIENT                            │
-│                  (client/test_client.py)                    │
-└────────────────────────┬────────────────────────────────────┘
-                         │  save invoices
-                         ▼  publish payment order
-┌─────────────────────────────────────────────────────────────┐
-│                  gRPC SERVER - 50051                        │
-│              (grpc_service/grpc_server.py)                  │
-│                                                             │                       
-│   • CreateInvoice / GetInvoice / UpdateInvoice              │   update invoice status
-│   • ListInvoices / DeleteInvoice / UpdateInvoiceStatus      │<------------------------| 
-└──────┬───────────────────────────────────────────────────────┘                         │
-       │ SQL                                                                            │
-       ▼                                                                                │
-┌────────────────────┐        ┌────────────────────────────────────┐      ┌────────────────────────────┐
-│ PostgreSQL - 5050  │        │        RabbitMQ - 15672            │      │  PAYMENT SERVICE - 50051   │
-│                    │        │                                    │      │ (payment_service/          │
-│                    │        │                                    │      │  payment_service.py)       │
-│                    │        │  ┌──────────────────────────────┐  │cons. │  1. Parse Message          │
-└────────────────────┘        │  │     payment_orders queue     │--│----->│  2. Validate Invoice       │
-                              │  └──────────────────────────────┘  │      │  3. Process Payment        │
-                              │  ┌──────────────────────────────┐  │publ. │  4. Update via gRPC        │
-                              │  │    payment_results queue     │<-│------│  5. Publish Result         │
-                              │  └──────────────────────────────┘  │      └────────────────────────────┘
-                              └────────────────────────────────────┘
+```mermaid
+flowchart LR
+       C[Test Client\nclient/test_client.py]
+       G[gRPC Server:50051\ngrpc_service/grpc_server.py]
+       DB[(PostgreSQL:5050)]
+       P[Payment Service\npayment_service/payment_service.py]
 
-                 
+       subgraph R[RabbitMQ:15672]
+              QO[[payment_orders queue]]
+              QR[[payment_results queue]]
+       end
+
+       C -->|Create/Get/List/Update/Delete Invoice| G
+       G -->|SQL| DB
+
+       C -->|Publish payment order| QO
+       QO -->|Consume| P
+       P -->|Publish result| QR
+       P -->|UpdateInvoiceStatus| G
 ```
 
 ---
