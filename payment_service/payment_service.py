@@ -71,7 +71,7 @@ class PaymentService:
             pika.exceptions.AMQPError: If connection retries are exhausted.
         """
         try:
-            self.rmq.connect(max_retries=5, retry_delay=2)
+            self.rmq.connect(max_retries=30, retry_delay=10)
             self.rmq.declare_queue('payment_orders', durable=True)
             self.rmq.declare_queue('payment_results', durable=True)
             
@@ -83,25 +83,6 @@ class PaymentService:
                 exc_info=e
             )
             raise
-
-    def _grpc_get_invoice(self, invoice_id: str):
-        """Fetch invoice through gRPC API.
-
-        Args:
-            invoice_id: Target invoice identifier.
-
-        Returns:
-            Invoice payload from gRPC response or None when not found/error.
-        """
-        try:
-            response = self.grpc_stub.GetInvoice(
-                getattr(PB2, "GetInvoiceRequest")(id=invoice_id),
-                timeout=5,
-            )
-            return response.invoice
-        except grpc.RpcError as e:
-            logger.log_error("gRPC GetInvoice failed", exc_info=e, invoice_id=invoice_id)
-            return None
 
     def _grpc_update_invoice_status(self, invoice_id: str, status: str) -> bool:
         """Update invoice status through gRPC API.
@@ -147,7 +128,7 @@ class PaymentService:
                 raise TypeError("Payment order must be a JSON object")
             
             # Validate required fields
-            required_fields = ['id', 'invoice_id', 'amount']
+            required_fields = ['id', 'invoice_id']
             if not all(field in payment_order for field in required_fields):
                 logger.log_warning(
                     "Invalid payment order - missing fields",
@@ -161,28 +142,6 @@ class PaymentService:
         except (json.JSONDecodeError, TypeError) as e:
             logger.log_error("Failed to parse payment order JSON", exc_info=e)
             return None
-    
-    def _validate_invoice(self, invoice_id: str) -> bool:
-        """Validate that an invoice exists.
-        
-        Args:
-            invoice_id: ID of invoice to check
-            
-        Returns:
-            True if invoice exists, False otherwise
-        """
-        invoice = self._grpc_get_invoice(invoice_id)
-        
-        if not invoice:
-            logger.log_warning("Invoice not found", invoice_id=invoice_id)
-            return False
-        
-        logger.log_debug(
-            "Invoice validated",
-            invoice_id=invoice_id,
-            status=invoice.status
-        )
-        return True
     
     def _simulate_payment_processing(self, payment_order: dict) -> bool:
         """Simulate payment processing.
@@ -203,7 +162,6 @@ class PaymentService:
             logger.log_debug(
                 "Simulating payment processing",
                 payment_id=payment_order['id'],
-                amount=payment_order['amount']
             )
             
             # Simulate processing time
@@ -221,7 +179,7 @@ class PaymentService:
             return False
     
     def _update_invoice_status(self, invoice_id: str) -> bool:
-        """Update invoice status to "paid" through gRPC.
+        """Update invoice status to "erp_exported" through gRPC.
         
         Args:
             invoice_id: ID of invoice to update
@@ -229,7 +187,7 @@ class PaymentService:
         Returns:
             bool: True if status update succeeded, False otherwise.
         """
-        success = self._grpc_update_invoice_status(invoice_id, "paid")
+        success = self._grpc_update_invoice_status(invoice_id, "erp_exported")
         if not success:
             logger.log_warning("Failed to update invoice status via gRPC", invoice_id=invoice_id)
             return False
@@ -238,7 +196,7 @@ class PaymentService:
             "UpdateInvoiceStatus",
             status="SUCCESS",
             invoice_id=invoice_id,
-            new_status="paid",
+            new_status="erp_exported",
         )
         return True
     
@@ -290,11 +248,10 @@ class PaymentService:
         
         This method is called by RabbitMQ for each message. It:
             1. Parses the message
-            2. Validates the invoice
-            3. Simulates payment processing
-            4. Calls gRPC to update invoice status
-            5. Sends result back via RabbitMQ
-            6. Acknowledges the message
+            2. Simulates payment processing
+            3. Calls gRPC to update invoice status
+            4. Sends result back via RabbitMQ
+            5. Acknowledges the message
         
         Args:
             ch: RabbitMQ channel
@@ -321,17 +278,6 @@ class PaymentService:
                 status="IN_PROGRESS",
                 payment_id=payment_order['id']
             )
-            
-            # Validate invoice exists
-            if not self._validate_invoice(payment_order['invoice_id']):
-                self._send_payment_result(
-                    payment_order['id'],
-                    payment_order['invoice_id'],
-                    False,
-                    "Invoice not found"
-                )
-                ch.basic_ack(delivery_tag=method.delivery_tag)
-                return
             
             # Process payment
             if not self._simulate_payment_processing(payment_order):

@@ -6,7 +6,6 @@ service InvoiceService {
   rpc CreateInvoice (CreateInvoiceRequest) returns (InvoiceResponse) {}
   rpc GetInvoice (GetInvoiceRequest) returns (InvoiceResponse) {}
   rpc ListInvoices (ListInvoicesRequest) returns (ListInvoicesResponse) {}
-  rpc UpdateInvoice (UpdateInvoiceRequest) returns (InvoiceResponse) {}
   rpc UpdateInvoiceStatus (UpdateInvoiceStatusRequest) returns (InvoiceResponse) {}
   rpc DeleteInvoice (DeleteInvoiceRequest) returns (DeleteInvoiceResponse) {}
 }
@@ -14,16 +13,18 @@ service InvoiceService {
 message Invoice {
   string id = 1;
   string supplier = 2;
-  double amount = 3;
-  string created_at = 4;
-  string updated_at = 5;
-  string status = 6;  // "pending", "paid", "cancelled"
+  string customer_number = 3;
+  string amount_gross = 4;
+  string created_at = 5;
+  string updated_at = 6;
+  string status = 7;  // "pending", "validated", "approved", "erp_exported", "rejected"
 }
 
 message CreateInvoiceRequest {
   string id = 1;
   string supplier = 2;
-  double amount = 3;
+  string amount_gross = 3;
+  string customer_number = 4;
 }
 
 message GetInvoiceRequest {
@@ -38,12 +39,6 @@ message ListInvoicesRequest {
 message ListInvoicesResponse {
   repeated Invoice invoices = 1;
   int32 total = 2;
-}
-
-message UpdateInvoiceRequest {
-  string id = 1;
-  string supplier = 2;
-  double amount = 3;
 }
 
 message UpdateInvoiceStatusRequest {

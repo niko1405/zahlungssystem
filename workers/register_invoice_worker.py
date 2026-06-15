@@ -47,9 +47,10 @@ class RegisterInvoiceTechnicalError(CamundaJobTechnicalError):
 class RegisterInvoicePayload:
     """Validated payload extracted from a Camunda job."""
 
-    amount: float
     invoice_id: str
     vendor: str
+    amount_gross: str
+    customer_number: str | None
 
 
 # Ensure the invoice table exists before the worker processes jobs.
@@ -65,22 +66,22 @@ def _parse_payload(job) -> RegisterInvoicePayload:
     if not invoice:
         raise RegisterInvoiceValidationError("invoice-Objekt fehlt in den Job-Variablen")
 
-    raw_amount = invoice.get("amount_net")
     raw_invoice_id = invoice.get("invoiceID")
     raw_vendor = invoice.get("vendor")
+    raw_amount_gross = invoice.get("amount_gross")
+    raw_customer_number = invoice.get("customer_number")
 
-    if raw_amount is None or raw_invoice_id is None or raw_vendor is None:
+    if raw_invoice_id is None or raw_vendor is None or raw_amount_gross is None:
         raise RegisterInvoiceValidationError(
-            "Pflichtvariablen amount_net, invoiceID und vendor fehlen"
+            "Pflichtvariablen invoiceID, vendor und amount_gross fehlen"
         )
-
-    try:
-        amount = float(raw_amount)
-    except (TypeError, ValueError) as exc:
-        raise RegisterInvoiceValidationError("amount_net muss eine Zahl sein") from exc
 
     invoice_id = str(raw_invoice_id).strip()
     vendor = str(raw_vendor).strip()
+    amount_gross = str(raw_amount_gross).strip()
+    customer_number = str(raw_customer_number).strip() if raw_customer_number is not None else None
+    if customer_number == "":
+        customer_number = None
 
     if not invoice_id:
         raise RegisterInvoiceValidationError("invoiceID darf nicht leer sein")
@@ -88,10 +89,15 @@ def _parse_payload(job) -> RegisterInvoicePayload:
     if not vendor:
         raise RegisterInvoiceValidationError("vendor darf nicht leer sein")
 
-    if amount <= 0:
-        raise RegisterInvoiceValidationError("amount_net muss größer als 0 sein")
+    if not amount_gross:
+        raise RegisterInvoiceValidationError("amount_gross darf nicht leer sein")
 
-    return RegisterInvoicePayload(amount=amount, invoice_id=invoice_id, vendor=vendor)
+    return RegisterInvoicePayload(
+        invoice_id=invoice_id,
+        vendor=vendor,
+        amount_gross=amount_gross,
+        customer_number=customer_number,
+    )
 
 
 def _store_invoice(payload: RegisterInvoicePayload):
@@ -99,7 +105,13 @@ def _store_invoice(payload: RegisterInvoicePayload):
 
     db = SessionLocal()
     try:
-        invoice = create_invoice(db, payload.invoice_id, payload.vendor, payload.amount)
+        invoice = create_invoice(
+            db,
+            payload.invoice_id,
+            payload.vendor,
+            payload.amount_gross,
+            customer_number=payload.customer_number,
+        )
         if not invoice:
             raise RegisterInvoiceAlreadyExistsError(
                 f"Rechnung {payload.invoice_id} existiert bereits"
@@ -111,11 +123,13 @@ def _store_invoice(payload: RegisterInvoicePayload):
             status="SUCCESS",
             invoice_id=invoice.id,
             supplier=invoice.supplier,
-            amount=invoice.amount,
+            amount_gross=invoice.amount_gross,
             source="camunda-job-worker",
         )
 
         return invoice
+    except RegisterInvoiceAlreadyExistsError:
+        raise
     except SQLAlchemyError as exc:
         db.rollback()
         logger.log_error(
@@ -138,7 +152,8 @@ def _invoice_to_variables(invoice) -> dict[str, Any]:
         "message": "Invoice registered successfully",
         "invoiceId": invoice.id,
         "vendor": invoice.supplier,
-        "amount": invoice.amount,
+        "customerNumber": invoice.customer_number or "",
+        "amountGross": invoice.amount_gross,
         "status": invoice.status,
         "createdAt": invoice.created_at.isoformat() if invoice.created_at else "",
         "updatedAt": invoice.updated_at.isoformat() if invoice.updated_at else "",
@@ -153,7 +168,7 @@ async def _register_invoice_handler(job) -> dict[str, Any]:
         logger.log_debug(
             "Processing register-invoice job",
             invoice_id=payload.invoice_id,
-            amount=payload.amount,
+            amount_gross=payload.amount_gross,
             vendor=payload.vendor,
         )
 

@@ -13,7 +13,6 @@ from .logging_config import setup_logging, get_logger, StructuredLogger
 from .db_helpers import (
     get_invoice_or_none,
     create_invoice,
-    update_invoice,
     update_invoice_status,
     delete_invoice,
     list_invoices,
@@ -28,7 +27,6 @@ __all__ = [
     # Database
     "get_invoice_or_none",
     "create_invoice",
-    "update_invoice",
     "update_invoice_status",
     "delete_invoice",
     "list_invoices",

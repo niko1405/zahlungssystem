@@ -35,7 +35,7 @@ class RequestInfoPayload:
     """Validated payload extracted from a Camunda job."""
 
     simulate_delay: bool
-    store_id: str
+    invoiceID: str
 
 
 def _parse_payload(job: JobContext) -> RequestInfoPayload:
@@ -43,17 +43,22 @@ def _parse_payload(job: JobContext) -> RequestInfoPayload:
 
     variables = get_job_variables(job)
     data = _as_mapping(variables.get("data"))
+    invoice = _as_mapping(variables.get("invoice"))
+    if not invoice:
+        raise RequestInfoValidationError("invoice-Objekt fehlt in den Job-Variablen")
+
+    raw_invoice_id = invoice.get("invoiceID")
+
+    invoice_id = str(raw_invoice_id or "").strip()
+    if not invoice_id:
+        raise RequestInfoValidationError("invoiceID darf nicht leer sein")
+
     if not data:
         raise RequestInfoValidationError("data-Objekt fehlt in den Job-Variablen")
 
-    store_id = str(data.get("storeId") or "").strip()
-
-    if not store_id:
-        raise RequestInfoValidationError("data.storeId fehlt oder ist leer")
-
     return RequestInfoPayload(
         simulate_delay=_as_bool(data.get("simulateDelay"), default=False),
-        store_id=store_id,
+        invoiceID=invoice_id,
     )
 
 
@@ -65,7 +70,6 @@ def _build_response(payload: RequestInfoPayload) -> dict[str, Any]:
         "message": "Request info job completed",
         "jobType": REQUEST_INFO_JOB_TYPE,
         "simulateDelay": payload.simulate_delay,
-        "storeId": payload.store_id,
         "messagePublished": not payload.simulate_delay,
         "status": "message_published"
         if not payload.simulate_delay
@@ -80,31 +84,27 @@ async def _request_info_handler(job: JobContext) -> dict[str, Any]:
         payload = _parse_payload(job)
         logger.log_debug(
             "Processing request-info job",
-            store_id=payload.store_id,
             simulate_delay=payload.simulate_delay,
         )
 
         if not payload.simulate_delay:
             await publish_camunda_message(
                 name="Message_InfoReceived",
-                correlation_key=payload.store_id,
+                correlation_key=payload.invoiceID,
                 logger=logger,
             )
             logger.log_debug(
                 "Published info received message",
-                store_id=payload.store_id,
                 message_name="Message_InfoReceived",
             )
         else:
             logger.log_debug(
                 "Skipping info message publication due to simulated delay",
-                store_id=payload.store_id,
             )
 
         logger.log_info(
             "Request-info successfully processed",
             job_type=REQUEST_INFO_JOB_TYPE,
-            store_id=payload.store_id,
             simulate_delay=payload.simulate_delay,
         )
 
@@ -123,7 +123,7 @@ def create_worker():
     """Create and configure the request-info worker instance."""
 
     worker_name = REQUEST_INFO_JOB_TYPE + "-worker"
-    fetch_vars = ["data"]
+    fetch_vars = ["data", "invoice"]
 
     return create_job_worker(
         job_type=REQUEST_INFO_JOB_TYPE,

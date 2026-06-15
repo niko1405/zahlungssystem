@@ -10,13 +10,12 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 
-import grpc
 import pika
 from camunda_orchestration_sdk.runtime.job_worker import JobContext, JobFailure
 
-from grpc_service.generated import invoice_pb2, invoice_pb2_grpc
 from utils import RabbitMQConnection, StructuredLogger
-from workers.errors import CamundaJobBusinessError, CamundaJobTechnicalError, CamundaJobValidationError
+from workers.errors import CamundaJobTechnicalError, CamundaJobValidationError
+from workers.helpers import _as_mapping
 from workers.job_types import EXECUTE_PAYMENT_JOB_TYPE
 from workers.runtime import create_job_worker, get_job_variables, map_job_exception, run_worker
 
@@ -28,19 +27,12 @@ DEFAULT_REQUESTED_BY = "camunda-worker/execute-payment"
 DEFAULT_RABBITMQ_URL = (
     "amqp://guest:guest@rabbitmq:5672/%2F?heartbeat=300&blocked_connection_timeout=300"
 )
-DEFAULT_GRPC_TARGET = "grpc-server:50051"
 
 
 class ExecutePaymentValidationError(CamundaJobValidationError):
     """Raised when the incoming execute-payment payload is invalid."""
 
     error_code = "EXECUTE_PAYMENT_VALIDATION_ERROR"
-
-
-class ExecutePaymentBusinessError(CamundaJobBusinessError):
-    """Raised when the referenced invoice cannot be processed."""
-
-    error_code = "EXECUTE_PAYMENT_BUSINESS_ERROR"
 
 
 class ExecutePaymentTechnicalError(CamundaJobTechnicalError):
@@ -60,50 +52,25 @@ def _parse_payload(job: JobContext) -> ExecutePaymentPayload:
     """Validate and normalize the variables expected by the worker."""
 
     variables = get_job_variables(job)
-    invoice_id = str(variables.get("invoiceID") or "").strip()
+    invoice = _as_mapping(variables.get("invoice"))
+    if not invoice:
+        raise ExecutePaymentValidationError("invoice-Objekt fehlt in den Job-Variablen")
 
+    invoice_id = str(invoice.get("invoiceID") or "").strip()
     if not invoice_id:
         raise ExecutePaymentValidationError("invoiceID darf nicht leer sein")
 
     return ExecutePaymentPayload(invoice_id=invoice_id)
 
 
-def _fetch_invoice(invoice_id: str) -> Any:
-    """Load the invoice amount from the invoice gRPC service."""
-
-    target = os.getenv("GRPC_SERVER_TARGET", DEFAULT_GRPC_TARGET)
-    channel = grpc.insecure_channel(target)
-    stub = invoice_pb2_grpc.InvoiceServiceStub(channel)
-
-    try:
-        request = getattr(invoice_pb2, "GetInvoiceRequest")(id=invoice_id)
-        response = stub.GetInvoice(request, timeout=5)
-        invoice = response.invoice
-        if not getattr(invoice, "id", ""):
-            raise ExecutePaymentBusinessError(f"Rechnung {invoice_id} konnte nicht gefunden werden")
-        return invoice
-    except grpc.RpcError as exc:
-        code = getattr(exc, "code", lambda: None)()
-        details = getattr(exc, "details", lambda: "")()
-        if str(code).endswith("NOT_FOUND"):
-            raise ExecutePaymentBusinessError(f"Rechnung {invoice_id} konnte nicht gefunden werden") from exc
-        raise ExecutePaymentTechnicalError(
-            f"gRPC-Zugriff auf Rechnung {invoice_id} fehlgeschlagen: {details or exc}"
-        ) from exc
-    finally:
-        channel.close()
-
-
-def _build_payment_order(invoice: Any, requested_by: str) -> dict[str, Any]:
+def _build_payment_order(invoice_id: str, requested_by: str) -> dict[str, Any]:
     """Build the RabbitMQ payload for the payment service."""
 
     payment_id = str(uuid.uuid4())
-    amount = float(getattr(invoice, "amount", 0.0) or 0.0)
 
     return {
         "id": payment_id,
-        "invoice_id": str(getattr(invoice, "id", "")).strip(),
-        "amount": amount,
+        "invoice_id": invoice_id,
         "payment_method": DEFAULT_PAYMENT_METHOD,
         "timestamp": int(datetime.now().timestamp()),
         "status": "pending",
@@ -145,8 +112,7 @@ async def _execute_payment_handler(job: JobContext) -> dict[str, Any]:
         payload = _parse_payload(job)
         logger.log_debug("Processing execute-payment job", invoice_id=payload.invoice_id)
 
-        invoice = _fetch_invoice(payload.invoice_id)
-        payment_order = _build_payment_order(invoice, DEFAULT_REQUESTED_BY)
+        payment_order = _build_payment_order(payload.invoice_id, DEFAULT_REQUESTED_BY)
         _publish_payment_order(payment_order)
 
         logger.log_debug(
@@ -167,7 +133,7 @@ async def _execute_payment_handler(job: JobContext) -> dict[str, Any]:
             "invoiceID": payload.invoice_id,
             "queue": "payment_orders",
         }
-    except (ExecutePaymentValidationError, ExecutePaymentBusinessError) as exc:
+    except ExecutePaymentValidationError as exc:
         map_job_exception(
             exc,
             job,
@@ -176,10 +142,12 @@ async def _execute_payment_handler(job: JobContext) -> dict[str, Any]:
             logger=logger,
         )
     except ExecutePaymentTechnicalError as exc:
+        _vars = get_job_variables(job)
+        _inv = _as_mapping(_vars.get("invoice"))
         logger.log_error(
             "Execute payment job failed technically",
             exc_info=exc,
-            invoice_id=str(get_job_variables(job).get("invoiceID") or "unknown"),
+            invoice_id=str(_inv.get("invoiceID") or "unknown"),
         )
         raise JobFailure(
             "Technischer Fehler beim Erstellen des Zahlungsauftrags",
@@ -191,7 +159,7 @@ def create_worker():
     """Create and configure the execute-payment worker instance."""
 
     worker_name = EXECUTE_PAYMENT_JOB_TYPE + "-worker"
-    fetch_vars = ["invoiceID"]
+    fetch_vars = ["invoice"]
 
     return create_job_worker(
         job_type=EXECUTE_PAYMENT_JOB_TYPE,

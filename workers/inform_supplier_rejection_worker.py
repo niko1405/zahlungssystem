@@ -31,8 +31,6 @@ class InformSupplierRejectionPayload:
     """Validated payload extracted from a Camunda job."""
 
     invoice_id: str
-    store_id: str
-    amount: float
     rejection_msg: str
 
 
@@ -40,35 +38,21 @@ def _parse_payload(job: JobContext) -> InformSupplierRejectionPayload:
     """Validate and normalize the variables expected by the worker."""
 
     variables = get_job_variables(job)
-    data = _as_mapping(variables.get("data"))
+    invoice = _as_mapping(variables.get("invoice"))
+    if not invoice:
+        raise InformSupplierRejectionValidationError("invoice-Objekt fehlt in den Job-Variablen")
 
-    raw_invoice_id = variables.get("invoiceID")
-    raw_store_id = data.get("storeId")
-    raw_amount = variables.get("amount")
+    raw_invoice_id = invoice.get("invoiceID")
     raw_rejection_msg = variables.get("rejectionMsg")
 
     invoice_id = str(raw_invoice_id or "").strip()
     if not invoice_id:
         raise InformSupplierRejectionValidationError("invoiceID darf nicht leer sein")
 
-    store_id = str(raw_store_id or "").strip()
-    if not store_id:
-        raise InformSupplierRejectionValidationError("data.storeId darf nicht leer sein")
-
-    if raw_amount is None:
-        raise InformSupplierRejectionValidationError("amount fehlt in den Job-Variablen")
-
-    try:
-        amount = float(raw_amount)
-    except (TypeError, ValueError) as exc:
-        raise InformSupplierRejectionValidationError("amount muss eine Zahl sein") from exc
-
     rejection_msg = str(raw_rejection_msg or "").strip() or DEFAULT_REJECTION_MESSAGE
 
     return InformSupplierRejectionPayload(
         invoice_id=invoice_id,
-        store_id=store_id,
-        amount=amount,
         rejection_msg=rejection_msg
     )
 
@@ -76,9 +60,8 @@ def _parse_payload(job: JobContext) -> InformSupplierRejectionPayload:
 def _print_email_preview(payload: InformSupplierRejectionPayload) -> None:
     """Print a clean e-mail preview to the terminal."""
 
-    recipient = f"lieferant-store-{payload.store_id}@uni-projekt.de"
+    recipient = f"lieferant@uni-projekt.de"
     subject = f"Ablehnung Ihrer Rechnung {payload.invoice_id}"
-    amount_text = f"{payload.amount:.2f} EUR"
 
     print()
     print("=" * 72)
@@ -91,10 +74,8 @@ def _print_email_preview(payload: InformSupplierRejectionPayload) -> None:
     print()
     print(
         f"leider müssen wir Ihnen mitteilen, dass die Rechnung {payload.invoice_id} "
-        f"über {amount_text} abgelehnt wurde."
+        f"abgelehnt wurde."
     )
-    print(f"Rechnungsbetrag: {amount_text}")
-    print(f"Invoice-ID: {payload.invoice_id}")
     print(f"complianceBemerkung: {payload.rejection_msg}")
     print()
     print("Bitte prüfen Sie die Angaben und kontaktieren Sie uns bei Rückfragen.")
@@ -112,8 +93,7 @@ async def _inform_supplier_rejection_handler(job: JobContext) -> dict[str, Any]:
         payload = _parse_payload(job)
         logger.log_debug(
             "Processing inform-supplier-rejection job",
-            invoice_id=payload.invoice_id,
-            amount=payload.amount,
+            invoice_id=payload.invoice_id
         )
 
         _print_email_preview(payload)
@@ -126,7 +106,6 @@ async def _inform_supplier_rejection_handler(job: JobContext) -> dict[str, Any]:
             "Inform-supplier-rejection successfully processed",
             job_type=INFORM_SUPPLIER_REJECTION_JOB_TYPE,
             invoice_id=payload.invoice_id,
-            store_id=payload.store_id,
         )
         return {"email_sent": True}
     except InformSupplierRejectionValidationError as exc:
@@ -151,7 +130,7 @@ def create_worker():
     """Create and configure the inform-supplier-rejection worker instance."""
 
     worker_name = INFORM_SUPPLIER_REJECTION_JOB_TYPE + "-worker"
-    fetch_vars = ["invoiceID", "amount", "rejectionMsg", "data"]
+    fetch_vars = ["invoice", "rejectionMsg", "data"]
 
     return create_job_worker(
         job_type=INFORM_SUPPLIER_REJECTION_JOB_TYPE,

@@ -24,33 +24,31 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\rinvoice.proto\x12\x07invoice\"o\n\x07Invoice\x12\n\n\x02id\x18\x01 \x01(\t\x12\x10\n\x08supplier\x18\x02 \x01(\t\x12\x0e\n\x06\x61mount\x18\x03 \x01(\x01\x12\x12\n\ncreated_at\x18\x04 \x01(\t\x12\x12\n\nupdated_at\x18\x05 \x01(\t\x12\x0e\n\x06status\x18\x06 \x01(\t\"D\n\x14\x43reateInvoiceRequest\x12\n\n\x02id\x18\x01 \x01(\t\x12\x10\n\x08supplier\x18\x02 \x01(\t\x12\x0e\n\x06\x61mount\x18\x03 \x01(\x01\"\x1f\n\x11GetInvoiceRequest\x12\n\n\x02id\x18\x01 \x01(\t\"2\n\x13ListInvoicesRequest\x12\x0c\n\x04skip\x18\x01 \x01(\x05\x12\r\n\x05limit\x18\x02 \x01(\x05\"I\n\x14ListInvoicesResponse\x12\"\n\x08invoices\x18\x01 \x03(\x0b\x32\x10.invoice.Invoice\x12\r\n\x05total\x18\x02 \x01(\x05\"D\n\x14UpdateInvoiceRequest\x12\n\n\x02id\x18\x01 \x01(\t\x12\x10\n\x08supplier\x18\x02 \x01(\t\x12\x0e\n\x06\x61mount\x18\x03 \x01(\x01\"8\n\x1aUpdateInvoiceStatusRequest\x12\n\n\x02id\x18\x01 \x01(\t\x12\x0e\n\x06status\x18\x02 \x01(\t\"\"\n\x14\x44\x65leteInvoiceRequest\x12\n\n\x02id\x18\x01 \x01(\t\"9\n\x15\x44\x65leteInvoiceResponse\x12\x0f\n\x07success\x18\x01 \x01(\x08\x12\x0f\n\x07message\x18\x02 \x01(\t\"V\n\x0fInvoiceResponse\x12\x0f\n\x07success\x18\x01 \x01(\x08\x12\x0f\n\x07message\x18\x02 \x01(\t\x12!\n\x07invoice\x18\x03 \x01(\x0b\x32\x10.invoice.Invoice2\xe7\x03\n\x0eInvoiceService\x12J\n\rCreateInvoice\x12\x1d.invoice.CreateInvoiceRequest\x1a\x18.invoice.InvoiceResponse\"\x00\x12\x44\n\nGetInvoice\x12\x1a.invoice.GetInvoiceRequest\x1a\x18.invoice.InvoiceResponse\"\x00\x12M\n\x0cListInvoices\x12\x1c.invoice.ListInvoicesRequest\x1a\x1d.invoice.ListInvoicesResponse\"\x00\x12J\n\rUpdateInvoice\x12\x1d.invoice.UpdateInvoiceRequest\x1a\x18.invoice.InvoiceResponse\"\x00\x12V\n\x13UpdateInvoiceStatus\x12#.invoice.UpdateInvoiceStatusRequest\x1a\x18.invoice.InvoiceResponse\"\x00\x12P\n\rDeleteInvoice\x12\x1d.invoice.DeleteInvoiceRequest\x1a\x1e.invoice.DeleteInvoiceResponse\"\x00\x62\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\rinvoice.proto\x12\x07invoice\"\x8e\x01\n\x07Invoice\x12\n\n\x02id\x18\x01 \x01(\t\x12\x10\n\x08supplier\x18\x02 \x01(\t\x12\x17\n\x0f\x63ustomer_number\x18\x03 \x01(\t\x12\x14\n\x0c\x61mount_gross\x18\x04 \x01(\t\x12\x12\n\ncreated_at\x18\x05 \x01(\t\x12\x12\n\nupdated_at\x18\x06 \x01(\t\x12\x0e\n\x06status\x18\x07 \x01(\t\"c\n\x14\x43reateInvoiceRequest\x12\n\n\x02id\x18\x01 \x01(\t\x12\x10\n\x08supplier\x18\x02 \x01(\t\x12\x14\n\x0c\x61mount_gross\x18\x03 \x01(\t\x12\x17\n\x0f\x63ustomer_number\x18\x04 \x01(\t\"\x1f\n\x11GetInvoiceRequest\x12\n\n\x02id\x18\x01 \x01(\t\"2\n\x13ListInvoicesRequest\x12\x0c\n\x04skip\x18\x01 \x01(\x05\x12\r\n\x05limit\x18\x02 \x01(\x05\"I\n\x14ListInvoicesResponse\x12\"\n\x08invoices\x18\x01 \x03(\x0b\x32\x10.invoice.Invoice\x12\r\n\x05total\x18\x02 \x01(\x05\"8\n\x1aUpdateInvoiceStatusRequest\x12\n\n\x02id\x18\x01 \x01(\t\x12\x0e\n\x06status\x18\x02 \x01(\t\"\"\n\x14\x44\x65leteInvoiceRequest\x12\n\n\x02id\x18\x01 \x01(\t\"9\n\x15\x44\x65leteInvoiceResponse\x12\x0f\n\x07success\x18\x01 \x01(\x08\x12\x0f\n\x07message\x18\x02 \x01(\t\"V\n\x0fInvoiceResponse\x12\x0f\n\x07success\x18\x01 \x01(\x08\x12\x0f\n\x07message\x18\x02 \x01(\t\x12!\n\x07invoice\x18\x03 \x01(\x0b\x32\x10.invoice.Invoice2\x9b\x03\n\x0eInvoiceService\x12J\n\rCreateInvoice\x12\x1d.invoice.CreateInvoiceRequest\x1a\x18.invoice.InvoiceResponse\"\x00\x12\x44\n\nGetInvoice\x12\x1a.invoice.GetInvoiceRequest\x1a\x18.invoice.InvoiceResponse\"\x00\x12M\n\x0cListInvoices\x12\x1c.invoice.ListInvoicesRequest\x1a\x1d.invoice.ListInvoicesResponse\"\x00\x12V\n\x13UpdateInvoiceStatus\x12#.invoice.UpdateInvoiceStatusRequest\x1a\x18.invoice.InvoiceResponse\"\x00\x12P\n\rDeleteInvoice\x12\x1d.invoice.DeleteInvoiceRequest\x1a\x1e.invoice.DeleteInvoiceResponse\"\x00\x62\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
 _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'invoice_pb2', _globals)
 if not _descriptor._USE_C_DESCRIPTORS:
   DESCRIPTOR._loaded_options = None
-  _globals['_INVOICE']._serialized_start=26
-  _globals['_INVOICE']._serialized_end=137
-  _globals['_CREATEINVOICEREQUEST']._serialized_start=139
-  _globals['_CREATEINVOICEREQUEST']._serialized_end=207
-  _globals['_GETINVOICEREQUEST']._serialized_start=209
-  _globals['_GETINVOICEREQUEST']._serialized_end=240
-  _globals['_LISTINVOICESREQUEST']._serialized_start=242
-  _globals['_LISTINVOICESREQUEST']._serialized_end=292
-  _globals['_LISTINVOICESRESPONSE']._serialized_start=294
-  _globals['_LISTINVOICESRESPONSE']._serialized_end=367
-  _globals['_UPDATEINVOICEREQUEST']._serialized_start=369
-  _globals['_UPDATEINVOICEREQUEST']._serialized_end=437
-  _globals['_UPDATEINVOICESTATUSREQUEST']._serialized_start=439
-  _globals['_UPDATEINVOICESTATUSREQUEST']._serialized_end=495
-  _globals['_DELETEINVOICEREQUEST']._serialized_start=497
-  _globals['_DELETEINVOICEREQUEST']._serialized_end=531
-  _globals['_DELETEINVOICERESPONSE']._serialized_start=533
-  _globals['_DELETEINVOICERESPONSE']._serialized_end=590
-  _globals['_INVOICERESPONSE']._serialized_start=592
-  _globals['_INVOICERESPONSE']._serialized_end=678
-  _globals['_INVOICESERVICE']._serialized_start=681
-  _globals['_INVOICESERVICE']._serialized_end=1168
+  _globals['_INVOICE']._serialized_start=27
+  _globals['_INVOICE']._serialized_end=169
+  _globals['_CREATEINVOICEREQUEST']._serialized_start=171
+  _globals['_CREATEINVOICEREQUEST']._serialized_end=270
+  _globals['_GETINVOICEREQUEST']._serialized_start=272
+  _globals['_GETINVOICEREQUEST']._serialized_end=303
+  _globals['_LISTINVOICESREQUEST']._serialized_start=305
+  _globals['_LISTINVOICESREQUEST']._serialized_end=355
+  _globals['_LISTINVOICESRESPONSE']._serialized_start=357
+  _globals['_LISTINVOICESRESPONSE']._serialized_end=430
+  _globals['_UPDATEINVOICESTATUSREQUEST']._serialized_start=432
+  _globals['_UPDATEINVOICESTATUSREQUEST']._serialized_end=488
+  _globals['_DELETEINVOICEREQUEST']._serialized_start=490
+  _globals['_DELETEINVOICEREQUEST']._serialized_end=524
+  _globals['_DELETEINVOICERESPONSE']._serialized_start=526
+  _globals['_DELETEINVOICERESPONSE']._serialized_end=583
+  _globals['_INVOICERESPONSE']._serialized_start=585
+  _globals['_INVOICERESPONSE']._serialized_end=671
+  _globals['_INVOICESERVICE']._serialized_start=674
+  _globals['_INVOICESERVICE']._serialized_end=1085
 # @@protoc_insertion_point(module_scope)

@@ -55,7 +55,8 @@ def create_invoice(
     db: Session,
     invoice_id: str,
     supplier: str,
-    amount: float
+    amount_gross: str,
+    customer_number: Optional[str] = None,
 ) -> Optional["Invoice"]:
     """Create a new invoice.
     
@@ -65,7 +66,8 @@ def create_invoice(
         db: Database session
         invoice_id: Unique invoice ID
         supplier: Supplier name
-        amount: Invoice amount
+        amount_gross: Gross invoice amount as string
+        customer_number: Optional customer number
         
     Returns:
         Created Invoice object or None if already exists
@@ -85,7 +87,8 @@ def create_invoice(
         invoice = Invoice(
             id=invoice_id,
             supplier=supplier,
-            amount=amount,
+            amount_gross=amount_gross,
+            customer_number=customer_number,
             status="pending"
         )
         db.add(invoice)
@@ -98,61 +101,13 @@ def create_invoice(
             status="SUCCESS",
             invoice_id=invoice_id,
             supplier=supplier,
-            amount=amount
+            amount_gross=amount_gross,
         )
 
         return invoice
     except SQLAlchemyError as exc:
         db.rollback()
         logger.log_error("Failed to create invoice", exc_info=exc, invoice_id=invoice_id)
-        raise
-
-
-def update_invoice(
-    db: Session,
-    invoice_id: str,
-    supplier: Optional[str] = None,
-    amount: Optional[float] = None
-) -> Optional["Invoice"]:
-    """Update an invoice.
-    
-    Args:
-        db: Database session
-        invoice_id: Invoice ID to update
-        supplier: New supplier name (optional)
-        amount: New amount (optional)
-        
-    Returns:
-        Updated Invoice object or None if not found
-
-    Raises:
-        SQLAlchemyError: If the update transaction fails.
-    """
-    try:
-        invoice = get_invoice_or_none(db, invoice_id)
-
-        if not invoice:
-            return None
-
-        if supplier is not None:
-            invoice.supplier = supplier
-        if amount is not None:
-            invoice.amount = amount
-
-        db.commit()
-        db.refresh(invoice)
-
-        logger.log_db_operation(
-            "UPDATE",
-            "invoice",
-            status="SUCCESS",
-            invoice_id=invoice_id
-        )
-
-        return invoice
-    except SQLAlchemyError as exc:
-        db.rollback()
-        logger.log_error("Failed to update invoice", exc_info=exc, invoice_id=invoice_id)
         raise
 
 
@@ -166,7 +121,7 @@ def update_invoice_status(
     Args:
         db: Database session
         invoice_id: Invoice ID to update
-        new_status: New status (pending, paid, cancelled)
+        new_status: New status (pending, validated, approved, erp_exported, rejected)
         
     Returns:
         Updated Invoice or None if not found

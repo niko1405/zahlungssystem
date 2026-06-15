@@ -27,7 +27,6 @@ from utils import (
     delete_invoice,
     get_invoice_or_none,
     list_invoices,
-    update_invoice,
     update_invoice_status,
 )
 
@@ -63,7 +62,8 @@ class InvoiceServiceServicer(invoice_pb2_grpc.InvoiceServiceServicer):
         return getattr(PB2, "Invoice")(  # pyright: ignore[reportAttributeAccessIssue]
             id=db_invoice.id,
             supplier=db_invoice.supplier,
-            amount=db_invoice.amount,
+            customer_number=db_invoice.customer_number or "",
+            amount_gross=db_invoice.amount_gross,
             created_at=db_invoice.created_at.isoformat() if db_invoice.created_at else "",
             updated_at=db_invoice.updated_at.isoformat() if db_invoice.updated_at else "",
             status=db_invoice.status,
@@ -87,7 +87,13 @@ class InvoiceServiceServicer(invoice_pb2_grpc.InvoiceServiceServicer):
         """
         logger.log_grpc_call("CreateInvoice", status="IN_PROGRESS", invoice_id=request.id)
         try:
-            invoice = create_invoice(self.db, request.id, request.supplier, request.amount)
+            invoice = create_invoice(
+                self.db,
+                request.id,
+                request.supplier,
+                request.amount_gross,
+                customer_number=request.customer_number or None,
+            )
             if not invoice:
                 context.abort(grpc.StatusCode.ALREADY_EXISTS, "Invoice already exists")
 
@@ -158,43 +164,6 @@ class InvoiceServiceServicer(invoice_pb2_grpc.InvoiceServiceServicer):
         except SQLAlchemyError as exc:
             logger.log_error("ListInvoices failed", exc_info=exc, skip=skip, limit=limit)
             context.abort(grpc.StatusCode.INTERNAL, "Error listing invoices")
-
-    def UpdateInvoice(self, request, context):
-        """Update supplier and/or amount for one invoice.
-
-        Args:
-            request: UpdateInvoiceRequest protobuf message.
-            context: gRPC ServicerContext.
-
-        Returns:
-            Protobuf response containing update result and updated invoice.
-
-        Raises:
-            grpc.RpcError: Forwarded when context.abort is called.
-            SQLAlchemyError: For database update failures.
-            ValueError: For invalid value conversion scenarios.
-            TypeError: For invalid request payload types.
-        """
-        logger.log_grpc_call("UpdateInvoice", status="IN_PROGRESS", invoice_id=request.id)
-        try:
-            updated = update_invoice(
-                self.db,
-                request.id,
-                supplier=request.supplier if request.supplier else None,
-                amount=request.amount if request.amount else None,
-            )
-            if not updated:
-                context.abort(grpc.StatusCode.NOT_FOUND, "Invoice not found")
-
-            logger.log_grpc_call("UpdateInvoice", status="SUCCESS", invoice_id=request.id)
-            return getattr(PB2, "InvoiceResponse")(  # pyright: ignore[reportAttributeAccessIssue]
-                success=True,
-                message="Invoice updated successfully",
-                invoice=self._to_proto(updated),
-            )
-        except (SQLAlchemyError, ValueError, TypeError) as exc:
-            logger.log_error("UpdateInvoice failed", exc_info=exc, invoice_id=request.id)
-            context.abort(grpc.StatusCode.INTERNAL, "Error updating invoice")
 
     def DeleteInvoice(self, request, context):
         """Delete one invoice by identifier.

@@ -4,6 +4,8 @@ services:
   # ==========================================
   postgres:
     image: postgres:18-alpine
+    ports:
+      - "5432:5432"
     environment:
       POSTGRES_USER: invoice_user
       POSTGRES_PASSWORD: invoice_password
@@ -113,9 +115,6 @@ services:
       - n8n_data:/home/node/.n8n
     networks:
       - invoice_network
-    dns:              
-      - 8.8.8.8        
-      - 1.1.1.1
 
   ngrok:
     image: ngrok/ngrok:latest
