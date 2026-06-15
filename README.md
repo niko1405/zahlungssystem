@@ -1,273 +1,132 @@
-# Rechnungsbearbeitung (gRPC + RabbitMQ + Docker)
+# Rechnungsbearbeitung – Camunda 8 Workflow-System
 
-Moderne, verteilte Architektur für Rechnungsverarbeitung und asynchrone Zahlungsbearbeitung.
+Dieses Projekt implementiert einen vollständigen, automatisierten **Rechnungsbearbeitungsprozess** auf Basis von **Camunda 8**. Eine eingehende Rechnung (per E-Mail als PDF) durchläuft dabei einen orchestrierten Workflow: vom automatischen Einlesen über Validierung, Genehmigung und Duplikatsprüfung bis hin zur Zahlungsauslösung und ERP-Statusaktualisierung.
 
-## Architektur-Überblick
+Camunda fungiert dabei als zentraler **Dirigent** – alle Prozessvariablen und der Rechnungs-Payload werden in Camunda gehalten und von dort an die jeweiligen Worker und externen Systeme (UiPath/ERP) weitergegeben. Die lokale Datenbank dient ausschließlich als schlanker **Metadaten-Index** für Duplikatsprüfung und Status-Dashboard.
+
+---
+
+## Architektur
 
 ```mermaid
-flowchart LR
-       C[Test Client\nclient/test_client.py]
-       G[gRPC Server:50051\ngrpc_service/grpc_server.py]
-       W1[Camunda Worker\nworkers/register_invoice_worker.py]
-       W2[Camunda Worker\nworkers/request_info_worker.py]
-       DB[(PostgreSQL:5432\nDB: invoice_db)]
-       A[pgAdmin:5050]
-       P[Payment Service\npayment_service/payment_service.py]
+flowchart TD
+    %% ── EXTERNAL ENTRY ──────────────────────────────────────────
+    EMAIL([Eingehende E-Mail\nRechnung als PDF-Anhang])
 
-       subgraph R[RabbitMQ:15672]
-              QO[[payment_orders queue]]
-              QR[[payment_results queue]]
-       end
+    %% ── INFRASTRUCTURE ──────────────────────────────────────────
+    subgraph INFRA["Infrastruktur"]
+        direction TB
+        MQ["RabbitMQ :5672\nManagement UI :15672"]
+        QO[[payment_orders]]
+        QR[[payment_results]]
+        MQ --- QO
+        MQ --- QR
+        DB[("PostgreSQL :5432\ninvoice_db")]
+        PGA["pgAdmin :5050"]
+        PGA -->|Admin UI| DB
+    end
 
-       C -->|Create/Get/List/Update/Delete Invoice| G
-       G -->|SQL| DB
-       W1 -->|SQL| DB
-       A -->|Connects to| DB
+    %% ── TOOLING ─────────────────────────────────────────────────
+    subgraph TOOLS["🔧 Tooling"]
+        direction TB
+        MAILPIT["Mailpit :8025\nSMTP :1025\nE-Mail Dev-Inbox"]
+        N8N["n8n :5678\nWorkflow-Automation\nPDF → Invoice-JSON"]
+        NGROK["ngrok\nTunnel → n8n Webhook"]
+        NGROK -->|tunnelt| N8N
+    end
 
-       C -->|Publish payment order| QO
-       QO -->|Consume| P
-       P -->|Publish result| QR
-       P -->|UpdateInvoiceStatus| G
-       C -->|register-invoice job| W1
-       C -->|request-info-worker job| W2
+    %% ── CORE SERVICES ───────────────────────────────────────────
+    subgraph CORE["Core Services"]
+        direction TB
+        GRPC["gRPC Server :50051\nInvoice CRUD\nDuplikatsprüfung"]
+        PS["Payment Service\nVerarbeitet Zahlungsaufträge"]
+    end
+
+    %% ── CAMUNDA WORKERS ─────────────────────────────────────────
+    subgraph WORKERS["🤖 Camunda Worker"]
+        direction TB
+        WML["mail-listener-worker\nPollt Mailpit, startet\nCamunda-Prozess"]
+        WRI["register-invoice-worker\nSpeichert Rechnung in DB\n(Duplikatsprüfung)"]
+        WRQ["request-info-worker\nSendet Camunda-Nachricht\nbei fehlenden Infos"]
+        WEP["execute-payment-worker\nPubliziert Zahlungsauftrag\nan RabbitMQ"]
+        WIS["inform-supplier-rejection-worker\nBenachrichtigt Lieferant\nbei Ablehnung"]
+    end
+
+    %% ── CAMUNDA ─────────────────────────────────────────────────
+    CAMUNDA["Camunda 8 Cloud\nProzess-Orchestrierung\nHält alle Prozessvariablen"]
+
+    %% ── CONNECTIONS ─────────────────────────────────────────────
+
+    %% E-Mail-Eingang
+    EMAIL -->|SMTP| MAILPIT
+    MAILPIT -->|"API: neue Mails?"| WML
+    WML -->|"PDF-Seite als Base64\nvia n8n-Webhook"| NGROK
+    N8N -->|"extrahiertes invoice-JSON"| WML
+    WML -->|"Message_InvoiceReceived\n+ invoice payload"| CAMUNDA
+
+    %% Camunda → Worker-Verbindungen
+    CAMUNDA -->|"register-invoice job\n(invoice payload)"| WRI
+    CAMUNDA -->|"request-info job"| WRQ
+    CAMUNDA -->|"execute-payment job\n(invoice payload)"| WEP
+    CAMUNDA -->|"inform-supplier-rejection job"| WIS
+
+    %% Worker → DB
+    WRI -->|"create invoice\n(Duplikatsprüfung)"| GRPC
+    GRPC -->|SQL| DB
+
+    %% Payment-Fluss
+    WEP -->|"{ id, invoice_id }\npublish"| QO
+    QO -->|consume| PS
+    PS -->|"UpdateInvoiceStatus\nerp_exported"| GRPC
+    PS -->|"publish result"| QR
+
+    %% request-info → Camunda
+    WRQ -->|"Camunda-Nachricht\nMessage_InfoReceived"| CAMUNDA
+
+    %% Styles
+    classDef infra fill:#e8f4f8,stroke:#2196F3,color:#000
+    classDef tools fill:#fff8e1,stroke:#FF9800,color:#000
+    classDef core fill:#e8f5e9,stroke:#4CAF50,color:#000
+    classDef worker fill:#f3e5f5,stroke:#9C27B0,color:#000
+    classDef camunda fill:#fce4ec,stroke:#E91E63,color:#000
+    classDef external fill:#f5f5f5,stroke:#9E9E9E,color:#000
+
+    class INFRA,MQ,QO,QR,DB,PGA infra
+    class TOOLS,MAILPIT,N8N,NGROK tools
+    class CORE,GRPC,PS core
+    class WORKERS,WML,WRI,WRQ,WEP,WIS worker
+    class CAMUNDA camunda
+    class EMAIL external
 ```
 
 ---
 
-## Hauptkomponenten
+## Komponenten
 
-### gRPC Server (`grpc_service/grpc_server.py`)
+### Infrastruktur
 
-**Zweck:** gRPC Endpunkte für CRUD-Operationen auf Rechnungen.
+- **PostgreSQL** — Relationale Datenbank (`invoice_db`). Speichert einen schlanken Metadaten-Index der Rechnungen (ID, Lieferant, Bruttobetrag, Status) für Duplikatsprüfung und Status-Dashboard. Kein schwerer ERP-Payload – dieser liegt in Camunda.
+- **RabbitMQ** — Message Broker mit zwei Queues: `payment_orders` (Worker → Payment Service) und `payment_results` (Payment Service → Ergebnis-Log).
+- **pgAdmin** — Web-UI zur Administration der PostgreSQL-Datenbank (`:5050`).
 
-**Methoden:**
+### Tooling
 
-| Methode | Input | Output | Beschreibung |
-| ------- | ----- | ------ | ------------ |
-| `CreateInvoice` | id, supplier, amount | Invoice | Neue Rechnung erstellen. Validiert, dass ID nicht doppelt existiert. |
-| `GetInvoice` | id | Invoice | Einzelne Rechnung abrufen. |
-| `ListInvoices` | skip, limit | [Invoice], total | Alle Rechnungen mit Pagination. |
-| `UpdateInvoice` | id, supplier?, amount? | Invoice | Supplier/Amount aktualisieren (optional). |
-| `UpdateInvoiceStatus` | id, status | Invoice | Nur den Status einer Rechnung aktualisieren. |
-| `DeleteInvoice` | id | success | Rechnung löschen. |
+- **Mailpit** — Lokale E-Mail-Dev-Inbox (SMTP `:1025`, Web-UI `:8025`). Fängt eingehende Rechnungs-E-Mails ab.
+- **n8n** — Low-Code Workflow-Automation. Empfängt PDF-Bilder vom Mail-Listener per Webhook, extrahiert mittels KI die Rechnungsdaten und gibt ein strukturiertes `invoice`-JSON zurück.
+- **ngrok** — Tunnelt den n8n-Webhook-Endpunkt ins lokale Netzwerk, damit der Worker den n8n-Container von außen erreichbar macht.
 
-**Workflow beispiel:**
+### Core Services
 
-```text
-Client ruft CreateInvoice auf
-       ↓
-gRPC Server prüft: Existiert diese ID schon?
-       ↓
-Falls nein: db_helpers.create_invoice() → SQLAlchemy INSERT
-       ↓
-StructuredLogger tracked: "DB CREATE invoice [SUCCESS] - invoice_id=INV-001"
-       ↓
-Protobuf Message → Client
-```
+- **gRPC Server** (`grpc_service/`) — Implementiert CRUD-Operationen auf der Invoice-DB über ein Protobuf-definiertes Interface (Port `:50051`). Wird vom `register-invoice-worker` für Duplikatsprüfung und vom Payment Service für Status-Updates genutzt.
+- **Payment Service** (`payment_service/`) — Konsumiert Zahlungsaufträge aus der `payment_orders`-Queue, simuliert die Zahlungsverarbeitung und ruft anschließend via gRPC `UpdateInvoiceStatus("erp_exported")` auf. Veröffentlicht das Ergebnis in `payment_results`.
 
----
+### Camunda Worker
 
-## Invoice-Datenobjekt
-
-Die fachliche Rechnung wird im Projekt an drei Stellen abgebildet:
-
-- als SQLAlchemy-Model in `grpc_service/models/invoice.py`
-- als gRPC-Message `Invoice` in `grpc_service/proto/invoice.proto`
-- als Python-Objekt aus den generierten Stubs in `grpc_service/generated/invoice_pb2.py`
-
-### Fachliche Felder
-
-| Feld | Typ | Beschreibung |
-| ---- | --- | ------------ |
-| `id` | `string` | Eindeutige Rechnungs-ID |
-| `supplier` | `string` | Lieferant oder Rechnungsaussteller |
-| `amount` | `double` | Rechnungsbetrag |
-| `created_at` | `string` | Erstellzeitpunkt als ISO-String |
-| `updated_at` | `string` | Letzte Änderung als ISO-String |
-| `status` | `string` | Status der Rechnung, z. B. `pending`, `paid`, `cancelled` |
-
-### Lebenszyklus im System
-
-```text
-Client sendet CreateInvoice
-       ↓
-gRPC Server erstellt Invoice-Objekt
-       ↓
-SQLAlchemy speichert in PostgreSQL
-       ↓
-GetInvoice / ListInvoices lesen dieselben Felder wieder aus
-       ↓
-Payment Service aktualisiert nur den Status über gRPC
-```
-
-### Beispielstruktur
-
-```python
-{
-    "id": "INV-001",
-    "supplier": "Acme Corp",
-    "amount": 1250.0,
-    "created_at": "2026-04-10T13:00:00+00:00",
-    "updated_at": "2026-04-10T13:05:00+00:00",
-    "status": "paid"
-}
-```
-
----
-
-### Payment Service (`payment_service/payment_service.py`)
-
-**Zweck:** Asynchrone Verarbeitung von Zahlungsaufträgen via RabbitMQ.
-
-**Workflow:**
-
-```text
-RabbitMQ payment_orders Queue
-       ↓
-[process_payment_order] callback greift Message
-       ↓
-[_process_payment_message]     → JSON parsen
-       ↓
-[_validate_invoice]            → DB: Existiert die Rechnung?
-       ↓
-[_simulate_payment_processing] → Zahlung simulieren (1s delay)
-       ↓
-[_update_database]             → db_helpers.update_invoice_status(..., "paid")
-       ↓
-[_send_payment_result]         → Result in payment_results Queue publishen
-       ↓
-Message ACK → Bestätigung an RabbitMQ
-```
-
-**Error Handling:**
-
-- JSON Parse Error → Message NACK (nicht requeued)
-- Invoice not found → Result "failed" senden, Message ACK
-- DB Update Error → Message NACK mit `requeue=True` (Retry)
-
-### Camunda 8 Job Worker (`workers/register_invoice_worker.py`)
-
-**Zweck:** Verarbeitet Camunda-Jobs mit dem Typ `register-invoice` und speichert neue Rechnungen in der Datenbank.
-
-**Eingangsvariablen:**
-
-- `amount`
-- `invoiceID`
-- `vendor`
-
-**Ergebnis bei Erfolg:**
-
-- `success=true`
-- `message`
-- `invoiceId`
-- `vendor`
-- `amount`
-- `status`
-- `createdAt`
-- `updatedAt`
-
-**Fachliche Fehlercodes für den Camunda Modeler:**
-
-- `REGISTER_INVOICE_VALIDATION_ERROR`
-- `REGISTER_INVOICE_ALREADY_EXISTS`
-
-Diese Fehler werden als Zeebe-Fehler beendet und können im BPMN-Modell mit Error Boundary Events oder Error End Events fachlich behandelt werden.
-
-**Technische Fehler:**
-
-- Datenbank- oder Infrastrukturprobleme werden als Job-Failure gemeldet, damit Camunda den Job gemäß Retry-Policy erneut versuchen kann.
-
-### Camunda 8 Job Worker (`workers/request_info_worker.py`)
-
-**Zweck:** Verarbeitet Camunda-Jobs mit dem Typ `request-info-worker`, liest das strukturierte Prozessobjekt `data` und veröffentlicht bei Bedarf die Nachricht `Message_InfoReceived`.
-
-**Eingangsvariablen:**
-
-- `data.simulateDelay` mit Standardwert `false`
-- `data.rechnungsDokument.documentId` als Correlation Key
-
-**Ergebnis bei Erfolg:**
-
-- `success=true`
-- `message`
-- `jobType`
-- `simulateDelay`
-- `documentId`
-- `infosErhalten`
-- `messagePublished`
-- `status`
-
-**Fehlerbehandlung:**
-
-- Fehlendes `data`-Objekt oder fehlende `documentId` werden als Zeebe-Fehler zurückgegeben.
-- Bei `simulateDelay=true` wird keine Nachricht gesendet, damit ein nachfolgendes Timer-Event greifen kann.
-- Technische Fehler beim Publizieren der Nachricht werden als Job-Failure gemeldet.
-
-#### Setup für Camunda Cloud SaaS
-
-1. Kopiere `.env.example` zu `.env`:
-
-```bash
-cp .env.example .env
-```
-
-2. Editiere `.env` und trage deine Camunda Cloud Credentials ein:
-
-```bash
-CAMUNDA_CLIENT_MODE=saas
-CAMUNDA_CLIENT_AUTH_CLIENT_ID=2qwRDM0MDQYft~UA5o_Y27KQl6DhKmOc
-CAMUNDA_CLIENT_AUTH_CLIENT_SECRET=IyGgtDJJ2NmkZR8zdHHO9h.XG6YphoVgGez3cC~LgZni64lqVryMRA84YyW34zTh
-CAMUNDA_CLIENT_CLOUD_CLUSTER_ID=487e2664-45fe-4a21-9e53-860eddc37e5e
-CAMUNDA_CLIENT_CLOUD_REGION=bru-2
-CAMUNDA_REST_ADDRESS=https://bru-2.zeebe.camunda.io/487e2664-45fe-4a21-9e53-860eddc37e5e/v2
-```
-
-3. Starte den Worker:
-
-**Lokal mit `uv`:**
-
-```bash
-uv run python -m workers.register_invoice_worker
-
-uv run python -m workers.request_info_worker
-```
-
-**Mit Docker Compose:**
-
-```bash
-docker compose -f workers/docker-compose.yml up -d --build
-```
-
-Der Worker wird sich automatisch mit deinem Camunda Cloud Cluster verbinden!
-
----
-
-### Hilfsfunktionen (`utils/`)
-
-**Lazy Logging** (`logging_config.py`):
-
-```python
-logger = StructuredLogger.for_module(__name__)
-logger.log_grpc_call("CreateInvoice", status="SUCCESS", invoice_id="INV-001")
-logger.log_db_operation("UPDATE", "invoice", status="SUCCESS", old_status="pending", new_status="paid")
-logger.log_rabbitmq_event("MESSAGE_RECEIVED", status="IN_PROGRESS", queue="payment_orders")
-```
-
-**Database Helpers** (`db_helpers.py`):
-
-- `create_invoice()` — Mit Existierungsprüfung
-- `get_invoice_or_none()` — Safe Get
-- `update_invoice_status()` — Status ändern
-- `list_invoices()` — Mit Pagination
-- `delete_invoice()` — Mit Validierung
-
-**RabbitMQ Wrapper** (`rabbitmq_helpers.py`):
-
-- `connect()` — Connection mit Retries
-- `declare_queue()` — Queue sicherstellen
-- `publish_message()` — Message publishen
-- `setup_consumer()` — Consumer registrieren
-- `start_consuming()` — Blocking Consumer Loop
+- **mail-listener-worker** — Pollt regelmäßig die Mailpit-API auf neue E-Mails. Extrahiert PDF-Anhänge, wandelt die erste Seite in ein Base64-Bild um, sendet es an den n8n-Webhook zur KI-Extraktion, und startet mit dem zurückgegebenen `invoice`-JSON den Camunda-Prozess via `Message_InvoiceReceived`.
+- **register-invoice-worker** — Empfängt das `invoice`-Objekt von Camunda, prüft auf Duplikate (via gRPC) und speichert die Rechnung als Metadaten-Eintrag in der DB (`status: pending`).
+- **request-info-worker** — Wird aufgerufen, wenn im Prozess Rückfragen beim Lieferanten notwendig sind. Sendet eine Camunda-Korrelationsnachricht (`Message_InfoReceived`), sobald die Antwort vorliegt.
+- **execute-payment-worker** — Liest `invoiceID` aus dem `invoice`-Objekt und publiziert einen schlanken Zahlungsauftrag `{ id, invoice_id, payment_method, … }` in die `payment_orders`-Queue. Kein gRPC-Aufruf – der komplette Invoice-Payload bleibt in Camunda.
+- **inform-supplier-rejection-worker** — Sendet im Ablehnungsfall eine Benachrichtigung an den Lieferanten.
 
 ---
 
@@ -302,7 +161,7 @@ user: guest
 pass: guest
 ```
 
-### 4. pgAdmin für PostgreSQL
+### 5. pgAdmin für PostgreSQL
 
 ```text
 http://localhost:5050
@@ -318,7 +177,7 @@ Nach dem Login den PostgreSQL-Server manuell anlegen:
 - User: `invoice_user`
 - Password: `invoice_password`
 
-### 5. Postgres prüfen
+### 6. Postgres prüfen
 
 ```bash
 docker compose exec postgres psql -U invoice_user -d invoice_db -c "\dt"
@@ -326,16 +185,6 @@ docker compose exec postgres psql -U invoice_user -d invoice_db -c "select * fro
 ```
 
 Hinweis: Die Tabelle `invoices` wird vom gRPC Service beim Start automatisch angelegt (SQLAlchemy `create_all`).
-
-### 6. Client mit gRPC Server testen
-
-**Lokal mit `uv`** (gRPC Server muss laufen, z.B. in Docker):
-
-```bash
-uv run python -m client.test_client
-```
-
-Der Test Client erstellt eine Beispiel-Rechnung, ruft sie ab und aktualisiert den Status.
 
 ---
 
@@ -347,15 +196,8 @@ Der Test Client erstellt eine Beispiel-Rechnung, ruft sie ab und aktualisiert de
 # Alles bauen und starten
 docker compose up -d --build
 
-# Nur mit Camunda Worker (separater Stack)
-docker compose -f workers/docker-compose.yml up -d --build
-
 # Logs anschauen (alle Services)
 docker compose logs -f
-
-# Logs für einen Service
-docker compose logs -f grpc-server
-docker compose logs -f payment-service
 
 # Container anhalten (Daten bleiben)
 docker compose down
@@ -378,13 +220,6 @@ docker compose build --no-cache
 ```bash
 # Dependencies synchronisieren
 uv sync
-
-# Python-Modul ausführen
-uv run python -m grpc_service
-uv run python -m payment_service
-uv run python -m client.test_client
-uv run python -m workers.register_invoice_worker
-uv run python -m workers.request_info_worker
 
 # gRPC Stubs neu generieren (nach .proto Änderungen)
 ./generate_grpc.sh
@@ -423,39 +258,3 @@ docker network inspect rechnungsbearbeitung_default
 # Image-Größe prüfen
 docker images | grep rechnungsbearbeitung
 ```
-
-## Fehlerbehebung
-
-### ModuleNotFoundError: No module named 'xyz'
-
-1. Stelle sicher, dass `uv sync` ausgeführt wurde
-2. Falls lokal: `uv run python -c "import xyz"`
-3. Falls Docker: `docker compose up -d --build` (neuer Build)
-
-### gRPC Server lässt sich nicht starten
-
-1. Port 50051 ist bereits belegt: `lsof -i :50051`
-2. Database nicht verfügbar: `docker compose logs postgres`
-3. Dependencies nicht geladen: `uv sync` / `docker compose up -d --build`
-
-### Camunda Worker findet Gateway nicht
-
-1. Stelle sicher, dass ein Zeebe/Camunda 8 Gateway erreichbar ist (Standard: `localhost:26500`)
-2. Umgebungsvariable setzen: `export ZEEBE_GRPC_ADDRESS=your-gateway:26500`
-3. In Docker mit `workers/docker-compose.yml`: Prüfe `docker compose -f workers/docker-compose.yml logs`
-4. **Für SaaS (Camunda Cloud):**
-   - Prüfe, dass `.env` korrekt mit deinen Credentials gefüllt ist
-   - Starte mit `export $(cat .env | xargs)` vor dem `uv run` Befehl
-   - Logs prüfen: `docker compose -f workers/docker-compose.yml logs` oder `uv run python -m workers.register_invoice_worker` in Terminal
-5. Teste die Credentials lokal:
-   ```bash
-   uv run python -c "import os; os.getenv('CAMUNDA_CLIENT_MODE'); print('SaaS Mode:', os.getenv('CAMUNDA_CLIENT_MODE')); print('Cluster:', os.getenv('CAMUNDA_CLIENT_CLOUD_CLUSTER_ID'))"
-   ```
-
----
-
-## Weitere Ressourcen
-
-- **API-Referenz**: [API_REFERENCE.md](API_REFERENCE.md)
-- **Logging-Guide**: [LOGGING_GUIDE.md](LOGGING_GUIDE.md)
-- **Quick Reference**: [QUICK_REFERENCE.md](QUICK_REFERENCE.md)
