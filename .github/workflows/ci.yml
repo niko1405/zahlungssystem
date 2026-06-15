@@ -5,7 +5,25 @@ on:
     branches:
       - main
       - master
+    paths:
+      - '**.py'
+      - 'pyproject.toml'
+      - 'uv.lock'
+      - 'Dockerfile.*'
+      - 'docker-compose.yml'
+      - 'generate_grpc.sh'
+      - 'grpc_service/proto/**'
+      - '.github/workflows/ci.yml'
   pull_request:
+    paths:
+      - '**.py'
+      - 'pyproject.toml'
+      - 'uv.lock'
+      - 'Dockerfile.*'
+      - 'docker-compose.yml'
+      - 'generate_grpc.sh'
+      - 'grpc_service/proto/**'
+      - '.github/workflows/ci.yml'
   workflow_dispatch:
 
 jobs:
