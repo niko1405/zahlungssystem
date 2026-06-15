@@ -129,6 +129,35 @@ Der vollständige Camunda-Prozess als BPMN-Modell:
 
 ---
 
+## Prozess starten
+
+Sobald der Stack läuft (`docker compose up -d --build`), kann der Rechnungsbearbeitungsprozess auf zwei Wegen ausgelöst werden:
+
+### Option 1 — Testskript (empfohlen für Entwicklung)
+
+Das Skript `scripts/send_invoice_mail.py` generiert automatisch eine zufällige PDF-Rechnung und sendet sie per SMTP an Mailpit. Der `mail-listener-worker` erkennt die neue E-Mail, extrahiert die PDF, schickt sie zur KI-Extraktion an n8n und startet damit den Camunda-Prozess.
+
+```bash
+uv run scripts/send_invoice_mail.py
+```
+
+> **Voraussetzung:** Mailpit muss erreichbar sein (`localhost:1025`). Der Stack muss laufen.
+
+### Option 2 — Eigener Mail-Client
+
+Eine E-Mail mit einer **PDF-Rechnung als Anhang** an folgenden SMTP-Endpunkt senden:
+
+```text
+Host:    localhost
+Port:    1025
+An:      rechnungseingang@eure-firma.de
+Anhang:  Rechnung als PDF
+```
+
+Der `mail-listener-worker` pollt Mailpit regelmäßig und verarbeitet jede neue E-Mail mit PDF-Anhang automatisch. Die E-Mail ist danach in der Mailpit-UI unter `http://localhost:8025` sichtbar.
+
+---
+
 ## Container Setup
 
 ### 1. Repository klonen und in Verzeichnis wechseln
