@@ -1,0 +1,97 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  # ──────────────────────────────────────────────────────────────
+  # JOB 1: Lint & Import-Check
+  # ──────────────────────────────────────────────────────────────
+  lint:
+    name: Lint & Import-Check
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      - name: Regenerate gRPC stubs
+        run: bash ./generate_grpc.sh
+
+      - name: Lint with ruff
+        run: uv run ruff check .
+
+      - name: Check import integrity (workers)
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+          DATABASE_URL: postgresql://invoice_user:invoice_password@localhost:5432/invoice_db
+          CAMUNDA_CLIENT_ID: ci-placeholder
+          CAMUNDA_CLIENT_SECRET: ci-placeholder
+          CAMUNDA_CLUSTER_ID: ci-placeholder
+          CAMUNDA_REGION: bru-2
+        run: |
+          uv run python -c "from grpc_service.models import Invoice; print('grpc_service.models OK')"
+          uv run python -c "from utils import create_invoice, update_invoice_status; print('utils OK')"
+          uv run python -c "from workers.register_invoice_worker import RegisterInvoicePayload; print('register_invoice_worker OK')"
+          uv run python -c "from workers.execute_payment_worker import ExecutePaymentPayload; print('execute_payment_worker OK')"
+          uv run python -c "from workers.request_info_worker import RequestInfoPayload; print('request_info_worker OK')"
+          uv run python -c "from workers.inform_supplier_rejection_worker import InformSupplierRejectionPayload; print('inform_supplier_rejection_worker OK')"
+
+  # ──────────────────────────────────────────────────────────────
+  # JOB 2: Docker Build Check
+  # ──────────────────────────────────────────────────────────────
+  docker-build:
+    name: Docker Build Check
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build grpc-server image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile.grpc_server
+          push: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build payment-service image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile.payment_service
+          push: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build workers image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile.workers
+          push: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

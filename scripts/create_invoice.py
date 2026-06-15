@@ -1,4 +1,3 @@
-import os
 import random
 from datetime import datetime, timedelta
 from reportlab.lib.pagesizes import A4

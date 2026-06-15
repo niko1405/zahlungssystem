@@ -40,6 +40,9 @@ packages = ["grpc_service", "payment_service", "config", "utils", "workers"]
 [tool.ruff]
 line-length = 88
 target-version = "py39"
+exclude = [
+    "**/generated/**",
+]
 
 [tool.black]
 line-length = 88

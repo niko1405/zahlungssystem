@@ -60,7 +60,7 @@ def _parse_payload(job: JobContext) -> InformSupplierRejectionPayload:
 def _print_email_preview(payload: InformSupplierRejectionPayload) -> None:
     """Print a clean e-mail preview to the terminal."""
 
-    recipient = f"lieferant@uni-projekt.de"
+    recipient = "lieferant@uni-projekt.de"
     subject = f"Ablehnung Ihrer Rechnung {payload.invoice_id}"
 
     print()
