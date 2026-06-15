@@ -53,10 +53,6 @@ class RegisterInvoicePayload:
     customer_number: str | None
 
 
-# Ensure the invoice table exists before the worker processes jobs.
-Base.metadata.create_all(bind=engine, tables=[Invoice.__table__])
-
-
 def _parse_payload(job) -> RegisterInvoicePayload:
     """Validate and normalize the variables expected by the worker."""
 
@@ -224,6 +220,7 @@ async def run_worker_instance() -> None:
 def main() -> None:
     """Entrypoint for `python -m workers.register_invoice_worker`."""
 
+    Base.metadata.create_all(bind=engine, tables=[Invoice.__table__])
     asyncio.run(run_worker_instance())
 
 

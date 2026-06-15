@@ -35,10 +35,6 @@ from .generated import invoice_pb2, invoice_pb2_grpc
 logger = StructuredLogger.for_module(__name__)
 PB2: Any = invoice_pb2
 
-# Ensure the invoice table exists before serving requests.
-Base.metadata.create_all(bind=engine, tables=[Invoice.__table__])
-
-
 class InvoiceServiceServicer(invoice_pb2_grpc.InvoiceServiceServicer):
     """gRPC service implementation for invoice operations."""
 
@@ -242,6 +238,7 @@ def serve() -> None:
     Raises:
         RuntimeError: If gRPC server initialization fails.
     """
+    Base.metadata.create_all(bind=engine, tables=[Invoice.__table__])
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
     invoice_pb2_grpc.add_InvoiceServiceServicer_to_server(InvoiceServiceServicer(), server)
     server.add_insecure_port("[::]:50051")
