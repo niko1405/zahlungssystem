@@ -9,39 +9,35 @@ Camunda fungiert dabei als zentraler **Dirigent** – alle Prozessvariablen und 
 ## Architektur
 
 ```mermaid
-flowchart LR
-    %% ── EINGANG (links) ──────────────────────────────────────────
+flowchart TB
+    %% ── CAMUNDA (Mitte / oben) ───────────────────────────────────
+    CAMUNDA(["Camunda 8 Cloud\nProzess-Engine\nOrchestrator"])
+
+    %% ── EINGANG (links oben) ─────────────────────────────────────
     subgraph ENTRY["Eingang"]
         direction TB
         EMAIL([Eingehende E-Mail\nRechnung als PDF])
-        subgraph TOOLS["Tooling"]
-            direction TB
-            MAILPIT["Mailpit\nSMTP :1025 / UI :8025"]
-            NGROK["ngrok\nWebhook-Tunnel"]
-            N8N["n8n :5678\nPDF → invoice-JSON"]
-        end
+        MAILPIT["Mailpit\nSMTP :1025  /  UI :8025"]
+        NGROK["ngrok  —  Webhook-Tunnel"]
+        N8N["n8n :5678\nPDF → invoice-JSON"]
         EMAIL -->|SMTP| MAILPIT
         NGROK -->|tunnelt| N8N
     end
 
-    %% ── CAMUNDA (Mitte) ──────────────────────────────────────────
-    subgraph ORCHESTRATOR["Camunda 8 Cloud  —  Orchestrator"]
-        direction TB
-        CAMUNDA(["Prozess-Engine\nHält alle Prozessvariablen"])
-        subgraph WORKERS["Camunda Worker"]
-            direction TB
-            WML["mail-listener"]
-            WRI["register-invoice"]
-            WRQ["request-info"]
-            WEP["execute-payment"]
-            WIS["inform-supplier-rejection"]
-        end
+    %% ── WORKER (links unten) ─────────────────────────────────────
+    subgraph WORKERS["Camunda Worker  (externe Python-Dienste)"]
+        direction LR
+        WML["mail-listener"]
+        WRI["register-invoice"]
+        WRQ["request-info"]
+        WEP["execute-payment"]
+        WIS["inform-supplier-rejection"]
     end
 
     %% ── BACKEND (rechts) ─────────────────────────────────────────
     subgraph BACKEND["Backend & Infrastruktur"]
         direction TB
-        GRPC["gRPC Server :50051\nInvoice CRUD"]
+        GRPC["gRPC Server :50051\nInvoice CRUD  /  Duplikatsprüfung"]
         DB[("PostgreSQL :5432\ninvoice_db")]
         PGA["pgAdmin :5050"]
         subgraph MQ["RabbitMQ :5672"]
@@ -56,17 +52,18 @@ flowchart LR
 
     %% ── VERBINDUNGEN ─────────────────────────────────────────────
 
-    %% Eingang → Worker → Camunda
+    %% Eingang → mail-listener → Camunda
     MAILPIT -->|"pollt neue Mails"| WML
     WML -->|"PDF als Base64"| NGROK
     N8N -->|"invoice-JSON"| WML
     WML -->|"Message_InvoiceReceived"| CAMUNDA
 
-    %% Camunda dispatcht Jobs an Worker
+    %% Camunda ↔ Worker (bidirektionale Orchestrierung)
     CAMUNDA -->|"register-invoice job"| WRI
     CAMUNDA -->|"request-info job"| WRQ
     CAMUNDA -->|"execute-payment job"| WEP
     CAMUNDA -->|"inform-rejection job"| WIS
+    WRQ -->|"Message_InfoReceived"| CAMUNDA
 
     %% Worker → Backend
     WRI -->|"create / Duplikat-Check"| GRPC
@@ -77,19 +74,16 @@ flowchart LR
     PS -->|"UpdateInvoiceStatus\nerp_exported"| GRPC
     PS -->|"publish result"| QR
 
-    %% request-info Rückmeldung
-    WRQ -->|"Message_InfoReceived"| CAMUNDA
-
     %% ── STYLES ───────────────────────────────────────────────────
+    classDef camunda  fill:#fce4ec,stroke:#B71C1C,color:#000,font-weight:bold,stroke-width:2px
     classDef entry    fill:#fff8e1,stroke:#F9A825,color:#000
-    classDef orch     fill:#fce4ec,stroke:#C62828,color:#000,font-weight:bold
     classDef worker   fill:#f3e5f5,stroke:#6A1B9A,color:#000
     classDef backend  fill:#e8f5e9,stroke:#2E7D32,color:#000
     classDef queue    fill:#e3f2fd,stroke:#1565C0,color:#000
     classDef db       fill:#e8eaf6,stroke:#283593,color:#000
 
+    class CAMUNDA camunda
     class EMAIL,MAILPIT,NGROK,N8N entry
-    class CAMUNDA orch
     class WML,WRI,WRQ,WEP,WIS worker
     class GRPC,PS,PGA backend
     class QO,QR queue
