@@ -9,95 +9,100 @@ Camunda fungiert dabei als zentraler **Dirigent** – alle Prozessvariablen und 
 ## Architektur
 
 ```mermaid
-flowchart TD
-    %% ── EXTERNAL ENTRY ──────────────────────────────────────────
-    EMAIL([Eingehende E-Mail\nRechnung als PDF-Anhang])
-
-    %% ── INFRASTRUCTURE ──────────────────────────────────────────
-    subgraph INFRA["Infrastruktur"]
+flowchart LR
+    %% ── EINGANG (links) ──────────────────────────────────────────
+    subgraph ENTRY["Eingang"]
         direction TB
-        MQ["RabbitMQ :5672\nManagement UI :15672"]
-        QO[[payment_orders]]
-        QR[[payment_results]]
-        MQ --- QO
-        MQ --- QR
-        DB[("PostgreSQL :5432\ninvoice_db")]
-        PGA["pgAdmin :5050"]
-        PGA -->|Admin UI| DB
-    end
-
-    %% ── TOOLING ─────────────────────────────────────────────────
-    subgraph TOOLS["🔧 Tooling"]
-        direction TB
-        MAILPIT["Mailpit :8025\nSMTP :1025\nE-Mail Dev-Inbox"]
-        N8N["n8n :5678\nWorkflow-Automation\nPDF → Invoice-JSON"]
-        NGROK["ngrok\nTunnel → n8n Webhook"]
+        EMAIL([Eingehende E-Mail\nRechnung als PDF])
+        subgraph TOOLS["Tooling"]
+            direction TB
+            MAILPIT["Mailpit\nSMTP :1025 / UI :8025"]
+            NGROK["ngrok\nWebhook-Tunnel"]
+            N8N["n8n :5678\nPDF → invoice-JSON"]
+        end
+        EMAIL -->|SMTP| MAILPIT
         NGROK -->|tunnelt| N8N
     end
 
-    %% ── CORE SERVICES ───────────────────────────────────────────
-    subgraph CORE["Core Services"]
+    %% ── CAMUNDA (Mitte) ──────────────────────────────────────────
+    subgraph ORCHESTRATOR["Camunda 8 Cloud  —  Orchestrator"]
         direction TB
-        GRPC["gRPC Server :50051\nInvoice CRUD\nDuplikatsprüfung"]
-        PS["Payment Service\nVerarbeitet Zahlungsaufträge"]
+        CAMUNDA(["Prozess-Engine\nHält alle Prozessvariablen"])
+        subgraph WORKERS["Camunda Worker"]
+            direction TB
+            WML["mail-listener"]
+            WRI["register-invoice"]
+            WRQ["request-info"]
+            WEP["execute-payment"]
+            WIS["inform-supplier-rejection"]
+        end
     end
 
-    %% ── CAMUNDA WORKERS ─────────────────────────────────────────
-    subgraph WORKERS["🤖 Camunda Worker"]
+    %% ── BACKEND (rechts) ─────────────────────────────────────────
+    subgraph BACKEND["Backend & Infrastruktur"]
         direction TB
-        WML["mail-listener-worker\nPollt Mailpit, startet\nCamunda-Prozess"]
-        WRI["register-invoice-worker\nSpeichert Rechnung in DB\n(Duplikatsprüfung)"]
-        WRQ["request-info-worker\nSendet Camunda-Nachricht\nbei fehlenden Infos"]
-        WEP["execute-payment-worker\nPubliziert Zahlungsauftrag\nan RabbitMQ"]
-        WIS["inform-supplier-rejection-worker\nBenachrichtigt Lieferant\nbei Ablehnung"]
+        GRPC["gRPC Server :50051\nInvoice CRUD"]
+        DB[("PostgreSQL :5432\ninvoice_db")]
+        PGA["pgAdmin :5050"]
+        subgraph MQ["RabbitMQ :5672"]
+            direction LR
+            QO[[payment_orders]]
+            QR[[payment_results]]
+        end
+        PS["Payment Service"]
+        GRPC --> DB
+        PGA -.- DB
     end
 
-    %% ── CAMUNDA ─────────────────────────────────────────────────
-    CAMUNDA["Camunda 8 Cloud\nProzess-Orchestrierung\nHält alle Prozessvariablen"]
+    %% ── VERBINDUNGEN ─────────────────────────────────────────────
 
-    %% ── CONNECTIONS ─────────────────────────────────────────────
+    %% Eingang → Worker → Camunda
+    MAILPIT -->|"pollt neue Mails"| WML
+    WML -->|"PDF als Base64"| NGROK
+    N8N -->|"invoice-JSON"| WML
+    WML -->|"Message_InvoiceReceived"| CAMUNDA
 
-    %% E-Mail-Eingang
-    EMAIL -->|SMTP| MAILPIT
-    MAILPIT -->|"API: neue Mails?"| WML
-    WML -->|"PDF-Seite als Base64\nvia n8n-Webhook"| NGROK
-    N8N -->|"extrahiertes invoice-JSON"| WML
-    WML -->|"Message_InvoiceReceived\n+ invoice payload"| CAMUNDA
-
-    %% Camunda → Worker-Verbindungen
-    CAMUNDA -->|"register-invoice job\n(invoice payload)"| WRI
+    %% Camunda dispatcht Jobs an Worker
+    CAMUNDA -->|"register-invoice job"| WRI
     CAMUNDA -->|"request-info job"| WRQ
-    CAMUNDA -->|"execute-payment job\n(invoice payload)"| WEP
-    CAMUNDA -->|"inform-supplier-rejection job"| WIS
+    CAMUNDA -->|"execute-payment job"| WEP
+    CAMUNDA -->|"inform-rejection job"| WIS
 
-    %% Worker → DB
-    WRI -->|"create invoice\n(Duplikatsprüfung)"| GRPC
-    GRPC -->|SQL| DB
+    %% Worker → Backend
+    WRI -->|"create / Duplikat-Check"| GRPC
+    WEP -->|"publish { invoice_id }"| QO
 
     %% Payment-Fluss
-    WEP -->|"{ id, invoice_id }\npublish"| QO
     QO -->|consume| PS
     PS -->|"UpdateInvoiceStatus\nerp_exported"| GRPC
     PS -->|"publish result"| QR
 
-    %% request-info → Camunda
-    WRQ -->|"Camunda-Nachricht\nMessage_InfoReceived"| CAMUNDA
+    %% request-info Rückmeldung
+    WRQ -->|"Message_InfoReceived"| CAMUNDA
 
-    %% Styles
-    classDef infra fill:#e8f4f8,stroke:#2196F3,color:#000
-    classDef tools fill:#fff8e1,stroke:#FF9800,color:#000
-    classDef core fill:#e8f5e9,stroke:#4CAF50,color:#000
-    classDef worker fill:#f3e5f5,stroke:#9C27B0,color:#000
-    classDef camunda fill:#fce4ec,stroke:#E91E63,color:#000
-    classDef external fill:#f5f5f5,stroke:#9E9E9E,color:#000
+    %% ── STYLES ───────────────────────────────────────────────────
+    classDef entry    fill:#fff8e1,stroke:#F9A825,color:#000
+    classDef orch     fill:#fce4ec,stroke:#C62828,color:#000,font-weight:bold
+    classDef worker   fill:#f3e5f5,stroke:#6A1B9A,color:#000
+    classDef backend  fill:#e8f5e9,stroke:#2E7D32,color:#000
+    classDef queue    fill:#e3f2fd,stroke:#1565C0,color:#000
+    classDef db       fill:#e8eaf6,stroke:#283593,color:#000
 
-    class INFRA,MQ,QO,QR,DB,PGA infra
-    class TOOLS,MAILPIT,N8N,NGROK tools
-    class CORE,GRPC,PS core
-    class WORKERS,WML,WRI,WRQ,WEP,WIS worker
-    class CAMUNDA camunda
-    class EMAIL external
+    class EMAIL,MAILPIT,NGROK,N8N entry
+    class CAMUNDA orch
+    class WML,WRI,WRQ,WEP,WIS worker
+    class GRPC,PS,PGA backend
+    class QO,QR queue
+    class DB db
 ```
+
+---
+
+## BPMN-Prozessdiagramm
+
+Der vollständige Camunda-Prozess als BPMN-Modell:
+
+![BPMN Rechnungsbearbeitung](assets/G5_Rechnungsbearbeitung.svg)
 
 ---
 
