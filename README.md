@@ -131,11 +131,11 @@ Der vollständige Camunda-Prozess als BPMN-Modell:
 
 ## Prozess starten
 
-Sobald der Stack läuft (`docker compose up -d --build`), kann der Rechnungsbearbeitungsprozess auf zwei Wegen ausgelöst werden:
+Sobald der Stack läuft (siehe unten), kann der Rechnungsbearbeitungsprozess auf zwei Wegen ausgelöst werden:
 
 ### Option 1 — Testskript (empfohlen für Entwicklung)
 
-Das Skript `scripts/send_invoice_mail.py` generiert automatisch eine zufällige PDF-Rechnung und sendet sie per SMTP an Mailpit. Der `mail-listener-worker` erkennt die neue E-Mail, extrahiert die PDF, schickt sie zur KI-Extraktion an n8n und startet damit den Camunda-Prozess.
+Das Skript `scripts/send_invoice_mail.py` generiert automatisch eine zufällige PDF-Rechnung und sendet sie per SMTP an Mailpit. Der `mail-listener-worker` erkennt die neue E-Mail, startet den Camunda-Prozess und schickt dabei das angehängte Rechnungsdokument mit.
 
 ```bash
 uv run scripts/send_invoice_mail.py
